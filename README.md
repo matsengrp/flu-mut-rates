@@ -16,6 +16,7 @@ mamba env create -f environment_usher.yml
 
 Run the pipeline:
 ```
+mamba activate flu-syn-rates
 snakemake -j 1 --use-conda
 ```
 The current version does not make use of multiple cores, but it's not hard.
