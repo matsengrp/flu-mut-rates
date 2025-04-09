@@ -1,0 +1,20 @@
+name: flu-syn-rates
+
+channels:
+  - https://prefix.dev/conda-forge
+  - https://prefix.dev/bioconda
+  - nodefaults
+
+dependencies:
+  - numpy
+  - matplotlib
+  - notebook
+  - ipywidgets
+  - snakemake
+  - git-lfs
+  - pandas
+  - seaborn
+  - scipy
+  - statsmodels
+  - bte
+
