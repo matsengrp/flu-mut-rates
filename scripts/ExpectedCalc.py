@@ -4,10 +4,12 @@ A class and helpers for computing expected counts across founder subtrees.
 
 import pandas as pd
 import numpy as np
-from functools import lru_cache
-from warnings import warn
-
+import re
 from collections import defaultdict
+
+
+# This version will work with a table of rates.
+
 
 # opt 1
 CODON_TABLE = {
@@ -79,30 +81,32 @@ CODON_TABLE = {
 
 
 def load_reference_from_fasta(reference_file):
-    """Provided a path to a fasta file containing a single sequence, load
-    that sequence and return it as a string"""
+    """
+    Provided a path to a fasta file containing a single sequence, load that sequence
+    and return it as a string.
+    """
     with open(reference_file, "r") as fh:
         next(fh)
-        reference_seq = ""
-        for line in fh:
-            reference_seq += line.strip()
+        reference_seq = "".join(map(str.strip, fh))
     return reference_seq
 
 
-def all_poss_muts(site_map):  # , coding_sites_tall):
+def all_poss_muts(site_map):
     """
-    Given a site map dataframe with rows 'site', and 'wt_nt',
-    return an exploded dataframe with a row
-    for all possible mutations to the input nts.
+    Given a site map dataframe with rows 'site', and 'wt_nt', return an exploded
+    dataframe with a row for all possible mutations to the input nts.
     """
-    # assert np.all(site_map.site == sorted(coding_sites_tall.site.unique()))
-
-    nt_set = set(["A", "T", "C", "G"])
     ret = site_map.copy()
-    # TODO padarallel this
-    ret[[1, 2, 3]] = ret.apply(
-        lambda x: tuple(nt_set.difference(set([x.wt_nt]))), axis=1, result_type="expand"
-    )
+    alt_nuc = [
+        {"A": "C", "T": "C", "C": "T", "G": "C"},
+        {"A": "T", "T": "A", "C": "A", "G": "T"},
+        {"A": "G", "T": "G", "C": "G", "G": "A"},
+    ]
+    re_pattern = re.compile("A|T|C|G")
+    for j in range(3):
+        fn = lambda x: alt_nuc[j][x.group(0)]
+        ret[j + 1] = ret.wt_nt.str.replace(re_pattern, fn, regex=True)
+
     ret_tall = ret.melt(id_vars=["site", "wt_nt"], value_name="mut_nt").drop(
         "variable", axis=1
     )
@@ -110,25 +114,39 @@ def all_poss_muts(site_map):  # , coding_sites_tall):
 
 
 def apply_muts(sequence, muts):
-    """Apply the (one-based) mutations in muts (an iterable containing mutations
-    in format like `A25G`) to the provided sequence, returning the result"""
-    for mut in muts:
-        frombase = mut[0]
-        tobase = mut[-1]
-        site = int(mut[1:-1]) - 1
-        if sequence[site] != frombase:
-            warn("parent base doesn't match existing base at the sequence")
-        sequence = sequence[:site] + tobase + sequence[site + 1 :]
-    return sequence
+    """
+    Return the sequence after applying mutations.
+
+    Args:
+        sequence (str): The sequence.
+        muts (dict): A dictionary of mutations. The keys are integers for the site of a
+            mutation (site indices start at 1); the values are strings for the resulting
+            nucleotide at the site. For example, muts[25] = 'G' indicates a mutation
+            resulting in 'G' at site 25 (which is at index 24 of sequence).
+    """
+    if len(muts) == 0:
+        return sequence
+    sites = sorted(muts.keys())
+    substrings = [sequence[: sites[0] - 1]]
+    for start, stop in zip(sites[:-1], sites[1:]):
+        tobase = muts[start]
+        seq = sequence[start : stop - 1]
+        substrings.append(tobase)
+        substrings.append(seq)
+    substrings.append(muts[sites[-1]])
+    substrings.append(sequence[sites[-1] :])
+
+    return "".join(substrings)
 
 
 def wide_codon_sites_to_tall(coding_sites):
     """
-    convert a dataframe with columns that maps sites to each possible
-    codon site, position, and gene, to a tall dataframe
-    with columns 'site', 'codon_site', 'codon_pos', and 'gene'
-    where sites are no longer unique.
+    Given a dataframe like PossibleMutations.coding_sites, where each row lists all
+    genes for a site, return a new dataframe like PossibleMutations.tall_coding_sites,
+    where sites for overlapping genes are are listed as multiple rows.
     """
+    # Maybe not the most efficient way, but this function is only called once (at
+    # instantiation of PossibleMutations).
     coding_sites_tall = defaultdict(list)
     for row_idx, data in coding_sites.iterrows():
         genes = data.gene.split(";")
@@ -139,237 +157,258 @@ def wide_codon_sites_to_tall(coding_sites):
             coding_sites_tall["gene"].append(features[0])
             coding_sites_tall["codon_position"].append(features[1])
             coding_sites_tall["codon_sites"].append(features[2])
-    return coding_sites_tall
+    return pd.DataFrame(coding_sites_tall)
 
 
 class PossibleMutations:
     """
-    Given a reference sequence (fasta path) and coding sites table (csv path)
-    (see ``ref_coding_sites.py``), this first computes all
-    possible nucleotide mutations (3X reference genome size),
-    then uses the annotation data to translate codons
-    such that for each of the possible nt mutations,
-    you know the resulting wildtype translation, and mutation translation.
+    Given a reference sequence (fasta path) and coding sites table (csv path, see
+    "ref_coding_sites.py"), this first computes all possible nucleotide mutations
+    (triple the reference genome size), then uses the annotation data to translate
+    codons such that for each of the possible nucleotide mutations, you know the
+    resulting wildtype translation, and mutation translation.
+
+    Attributes:
+        bad_site_list (list): A list of low quality nucleotide sites that are omitted in
+            all calculations.
+        coding_sites (pd.DataFrame): A dataframe with one row per nucleotide site that
+            lists: the codon position (1, 2, or 3); codon site (position in the
+            gene); and gene for the nucleotide site. The values for sites in overlapping
+            genes are listed in a single row as semi-colon separated values.
+        gene_fix (bool): When True, remove duplicate entries in self.coding_sites. See
+           issue 46 (https://github.com/matsengrp/s2trajectory/issues/46) for details.
+        ref_seq (str): The unmutated reference genome.
+        reference_mutations_df (pd.DataFrame): A dataframe describing all possible
+            nucleotide site mutations (of the reference sequence) in terms of the codon
+            information in self.tall_coding_sites. Bad sites are omitted...
+        reference_site_map (pd.DataFrame): The reference sequence as a dataframe listing
+            site and nucleotide. Bad sites are omitted...
+        tall_coding_sites (pd.DataFrame): A dataframe with the same information as
+            self.coding_sites. The values for sites in overlapping genes are listed in
+            separate rows.
+
 
     Example
     -------
     Intialized with the SCV2 Wuhan reference strain and coding sites,
     we will have access to the ``reference_mutations_df`` attribute:
 
-    >>> poss = PossibleMutations(fasta_path, coding_sites)
-    >>> poss.reference_mutations_df.query("site.isin([284, 285, 286])")
-        site wt_nt mut_nt    gene codon_position codon_sites wt_codon mut_codon wt_aa mut_aa is_synonymous    nuc   aa          ID
-    903   284     G      C   ORF1a              1           7      GGT       CGT     G      R         False  G284C  G7R   ORF1a-G7R
-    904   284     G      C  ORF1ab              1           7      GGT       CGT     G      R         False  G284C  G7R  ORF1ab-G7R
-    905   284     G      A   ORF1a              1           7      GGT       AGT     G      S         False  G284A  G7S   ORF1a-G7S
-    906   284     G      A  ORF1ab              1           7      GGT       AGT     G      S         False  G284A  G7S  ORF1ab-G7S
-    907   284     G      T   ORF1a              1           7      GGT       TGT     G      C         False  G284T  G7C   ORF1a-G7C
-    908   284     G      T  ORF1ab              1           7      GGT       TGT     G      C         False  G284T  G7C  ORF1ab-G7C
-    909   285     G      C   ORF1a              2           7      GGT       GCT     G      A         False  G285C  G7A   ORF1a-G7A
-    910   285     G      C  ORF1ab              2           7      GGT       GCT     G      A         False  G285C  G7A  ORF1ab-G7A
-    911   285     G      A   ORF1a              2           7      GGT       GAT     G      D         False  G285A  G7D   ORF1a-G7D
-    912   285     G      A  ORF1ab              2           7      GGT       GAT     G      D         False  G285A  G7D  ORF1ab-G7D
-    913   285     G      T   ORF1a              2           7      GGT       GTT     G      V         False  G285T  G7V   ORF1a-G7V
-    914   285     G      T  ORF1ab              2           7      GGT       GTT     G      V         False  G285T  G7V  ORF1ab-G7V
-    915   286     T      C   ORF1a              3           7      GGT       GGC     G      G          True  T286C  G7G   ORF1a-G7G
-    916   286     T      C  ORF1ab              3           7      GGT       GGC     G      G          True  T286C  G7G  ORF1ab-G7G
-    917   286     T      A   ORF1a              3           7      GGT       GGA     G      G          True  T286A  G7G   ORF1a-G7G
-    918   286     T      A  ORF1ab              3           7      GGT       GGA     G      G          True  T286A  G7G  ORF1ab-G7G
-    919   286     T      G   ORF1a              3           7      GGT       GGG     G      G          True  T286G  G7G   ORF1a-G7G
-    920   286     T      G  ORF1ab              3           7      GGT       GGG     G      G          True  T286G  G7G  ORF1ab-G7G
+    >>> poss = PossibleMutations(fasta_path, coding_sites, secondary_struct, True)
+    >>> poss.reference_mutations_df.query("site.isin([13467, 13468, 13469])")
+            site wt_nt mut_nt   gene  codon_position codon_sites wt_codon mut_codon wt_aa mut_aa  is_synonymous      nuc      aa            ID
+    40398  13467     A      C  ORF1a               2        4401      AAC       ACC     N      T          False  A13467C  N4401T  ORF1a-N4401T
+    40399  13467     A      T  ORF1a               2        4401      AAC       ATC     N      I          False  A13467T  N4401I  ORF1a-N4401I
+    40400  13467     A      G  ORF1a               2        4401      AAC       AGC     N      S          False  A13467G  N4401S  ORF1a-N4401S
+    40401  13468     C      T  ORF1a               3        4401      AAC       AAT     N      N           True  C13468T  N4401N  ORF1a-N4401N
+    40402  13468     C      T  ORF1b               1        4402      CGG       TGG     R      W          False  C13468T  R4402W  ORF1b-R4402W
+    40403  13468     C      A  ORF1a               3        4401      AAC       AAA     N      K          False  C13468A  N4401K  ORF1a-N4401K
+    40404  13468     C      A  ORF1b               1        4402      CGG       AGG     R      R           True  C13468A  R4402R  ORF1b-R4402R
+    40405  13468     C      G  ORF1a               3        4401      AAC       AAG     N      K          False  C13468G  N4401K  ORF1a-N4401K
+    40406  13468     C      G  ORF1b               1        4402      CGG       GGG     R      G          False  C13468G  R4402G  ORF1b-R4402G
+    40407  13469     G      C  ORF1a               1        4402      GGG       CGG     G      R          False  G13469C  G4402R  ORF1a-G4402R
+    40408  13469     G      C  ORF1b               2        4402      CGG       CCG     R      P          False  G13469C  R4402P  ORF1b-R4402P
+    40409  13469     G      T  ORF1a               1        4402      GGG       TGG     G      W          False  G13469T  G4402W  ORF1a-G4402W
+    40410  13469     G      T  ORF1b               2        4402      CGG       CTG     R      L          False  G13469T  R4402L  ORF1b-R4402L
+    40411  13469     G      A  ORF1a               1        4402      GGG       AGG     G      R          False  G13469A  G4402R  ORF1a-G4402R
+    40412  13469     G      A  ORF1b               2        4402      CGG       CAG     R      Q          False  G13469A  R4402Q  ORF1b-R4402Q
 
-    Above, you can see the entries for just three reference sites (284, 285, 286)
-    in the reference sequence. These sites happen to exist within two overlapping
-    codons for the ORF1a and ORF1ab genes, and so we make an entry for each possible
-    _codon mutation_.
+    Above, you can see the entries for just three reference sites (13467, 13468, 13469)
+    in the reference sequence. Sites 13468 and 13469 are in the overlap of the ORF1a and
+    ORF1b genes, and so we make an entry for each possible codon mutation in a gene.
+    For example, the nucleotide mutation C->T at site 13468 in ORF1a is the synonymous
+    amino acid mutation N->N, while in ORF1b it is the non-synonymous R->W.
 
-    Additionally, this class provides the ability to obtain a modified version
-    of the reference mutations table above, for new subtree founder variants.
+    Additionally, the class provides the ability to obtain a modified version of the
+    above table for new subtree founder variants. For example, we have the possible
+    mutations after the nucleotide at site 13468 has mutated to an A.
 
-    >>> founder_muts_df = poss.possible_muts_from_founder_muts(tuple(["G285A"]))
-    >>> founder_muts_df.query("site.isin([284, 285, 286])")
-            site wt_nt mut_nt    gene codon_position codon_sites wt_codon mut_codon wt_aa mut_aa is_synonymous    nuc   aa          ID
-    130215   284     G      C   ORF1a              1           7      GAT       CAT     D      H         False  G284C  D7H   ORF1a-D7H
-    130216   284     G      C  ORF1ab              1           7      GAT       CAT     D      H         False  G284C  D7H  ORF1ab-D7H
-    130217   284     G      A   ORF1a              1           7      GAT       AAT     D      N         False  G284A  D7N   ORF1a-D7N
-    130218   284     G      A  ORF1ab              1           7      GAT       AAT     D      N         False  G284A  D7N  ORF1ab-D7N
-    130219   284     G      T   ORF1a              1           7      GAT       TAT     D      Y         False  G284T  D7Y   ORF1a-D7Y
-    130220   284     G      T  ORF1ab              1           7      GAT       TAT     D      Y         False  G284T  D7Y  ORF1ab-D7Y
-    130221   285     A      C   ORF1a              2           7      GAT       GCT     D      A         False  A285C  D7A   ORF1a-D7A
-    130222   285     A      C  ORF1ab              2           7      GAT       GCT     D      A         False  A285C  D7A  ORF1ab-D7A
-    130223   285     A      T   ORF1a              2           7      GAT       GTT     D      V         False  A285T  D7V   ORF1a-D7V
-    130224   285     A      T  ORF1ab              2           7      GAT       GTT     D      V         False  A285T  D7V  ORF1ab-D7V
-    130225   285     A      G   ORF1a              2           7      GAT       GGT     D      G         False  A285G  D7G   ORF1a-D7G
-    130226   285     A      G  ORF1ab              2           7      GAT       GGT     D      G         False  A285G  D7G  ORF1ab-D7G
-    130227   286     T      C   ORF1a              3           7      GAT       GAC     D      D          True  T286C  D7D   ORF1a-D7D
-    130228   286     T      C  ORF1ab              3           7      GAT       GAC     D      D          True  T286C  D7D  ORF1ab-D7D
-    130229   286     T      A   ORF1a              3           7      GAT       GAA     D      E         False  T286A  D7E   ORF1a-D7E
-    130230   286     T      A  ORF1ab              3           7      GAT       GAA     D      E         False  T286A  D7E  ORF1ab-D7E
-    130231   286     T      G   ORF1a              3           7      GAT       GAG     D      E         False  T286G  D7E   ORF1a-D7E
-    130232   286     T      G  ORF1ab              3           7      GAT       GAG     D      E         False  T286G  D7E  ORF1ab-D7E
+    >>> founder_muts_df = poss.possible_muts_from_founder_muts({13468: "A"})
+    >>> founder_muts_df.query("site.isin([13467, 13468, 13469])")
+            site wt_nt mut_nt   gene  codon_position codon_sites wt_codon mut_codon wt_aa mut_aa  is_synonymous      nuc      aa            ID
+    88584  13467     A      C  ORF1a               2        4401      AAA       ACA     K      T          False  A13467C  K4401T  ORF1a-K4401T
+    88585  13467     A      T  ORF1a               2        4401      AAA       ATA     K      I          False  A13467T  K4401I  ORF1a-K4401I
+    88586  13467     A      G  ORF1a               2        4401      AAA       AGA     K      R          False  A13467G  K4401R  ORF1a-K4401R
+    88587  13468     A      C  ORF1a               3        4401      AAA       AAC     K      N          False  A13468C  K4401N  ORF1a-K4401N
+    88588  13468     A      C  ORF1b               1        4402      AGG       CGG     R      R           True  A13468C  R4402R  ORF1b-R4402R
+    88589  13468     A      T  ORF1a               3        4401      AAA       AAT     K      N          False  A13468T  K4401N  ORF1a-K4401N
+    88590  13468     A      T  ORF1b               1        4402      AGG       TGG     R      W          False  A13468T  R4402W  ORF1b-R4402W
+    88591  13468     A      G  ORF1a               3        4401      AAA       AAG     K      K           True  A13468G  K4401K  ORF1a-K4401K
+    88592  13468     A      G  ORF1b               1        4402      AGG       GGG     R      G          False  A13468G  R4402G  ORF1b-R4402G
+    88593  13469     G      C  ORF1a               1        4402      GGG       CGG     G      R          False  G13469C  G4402R  ORF1a-G4402R
+    88594  13469     G      C  ORF1b               2        4402      AGG       ACG     R      T          False  G13469C  R4402T  ORF1b-R4402T
+    88595  13469     G      T  ORF1a               1        4402      GGG       TGG     G      W          False  G13469T  G4402W  ORF1a-G4402W
+    88596  13469     G      T  ORF1b               2        4402      AGG       ATG     R      M          False  G13469T  R4402M  ORF1b-R4402M
+    88597  13469     G      A  ORF1a               1        4402      GGG       AGG     G      R          False  G13469A  G4402R  ORF1a-G4402R
+    88598  13469     G      A  ORF1b               2        4402      AGG       AAG     R      K          False  G13469A  R4402K  ORF1b-R4402K
     """  # noqa: E501
 
-    def __init__(self, ref_seq: str, coding_sites: str):
+    def __init__(
+        self,
+        ref_seq: str,
+        coding_sites: str,
+        bad_sites_path: str,
+        secondary_struct: str,
+        rates_table: str,
+        gene_fix=True,
+    ):
+        self.gene_fix = gene_fix
         self.ref_seq = load_reference_from_fasta(ref_seq)
-        self.coding_sites = pd.read_csv(coding_sites)
+        self.basepair_df = pd.read_csv(secondary_struct)
+        self.rates_df = pd.read_csv(rates_table)
+        self.boundary_df = self.rates_df.groupby("mut_type").nt_site_boundary.first()
+        # Now that we've recorded the site boundaries, we can drop them from rates_df.
+        self.rates_df.drop(columns=["nt_site_boundary"], inplace=True)
 
+        self.set_coding_sites_df(coding_sites)
         if len(self.coding_sites) != len(self.ref_seq):
             raise ValueError(
                 f"reference sequence and codon sites must be the same length"
                 f", got {len(self.ref_seq)}, and {len(self.coding_sites)}"
             )
-
         if not np.all(self.coding_sites.site == np.arange(1, len(self.ref_seq) + 1)):
             raise ValueError("codon sites must be in order of reference sequence")
-        self.tall_coding_sites = pd.DataFrame(
-            wide_codon_sites_to_tall(self.coding_sites)
-        )
 
-        # get all possible mutations at each site
+        self.tall_coding_sites = wide_codon_sites_to_tall(self.coding_sites)
+        self.load_bad_sites_from_file(bad_sites_path)
         self.reference_site_map = pd.DataFrame(
             {"site": np.arange(1, len(self.ref_seq) + 1), "wt_nt": list(self.ref_seq)}
         )
-
+        self.reference_site_map.query("~site.isin(@self.bad_site_list)", inplace=True)
         self.reference_mutations_df = self.possible_mutations_df()
+
+    def load_bad_sites_from_file(self, bad_sites_path):
+        """Load a list of bad sites from file."""
+        with open(bad_sites_path) as the_file:
+            self.bad_site_list = sorted(map(int, map(str.strip, the_file)))
+        return None
+
+    def add_extra_featues(self, the_df, ref_seq):
+        """
+        Given a dataframe with columns "site", "wt_nt", and "mut_nt" and a reference
+        sequence, return a new dataframe with additional columns  "mut_type", "motif"
+        (3-mer local sequence context), "unpaired" (secondary rna structure),
+        "nt_site_boundary" (the site boundary for global context), and
+        "nt_site_before_boundary" (whether or not the site is before the boundary).
+        """
+        motif_at_site = lambda s: ref_seq[s - 2 : s + 1]
+        the_df = the_df.merge(self.basepair_df, on="site")
+        the_df["motif"] = the_df.site.apply(motif_at_site)
+        the_df["mut_type"] = the_df.wt_nt + the_df.mut_nt
+        the_df = the_df.merge(self.boundary_df, on="mut_type")
+        the_df["nt_site_before_boundary"] = the_df.site < the_df.nt_site_boundary
+
+        return the_df
+
+    def set_coding_sites_df(self, file_path):
+        """
+        Current fix for issue 46 (https://github.com/matsengrp/s2trajectory/issues/46).
+        Once that is fixed upstream, need only read in csv.
+        """
+        coding_sites = pd.read_csv(file_path, keep_default_na=False)
+        if self.gene_fix:
+            to_fix = coding_sites.query("266 <= site <=13467")
+            codon_position = to_fix.codon_position.str.split(";").str.get(0)
+            codon_site = to_fix.codon_site.str.split(";").str.get(0)
+            coding_sites.loc[to_fix.index, "codon_position"] = codon_position
+            coding_sites.loc[to_fix.index, "codon_site"] = codon_site
+            coding_sites.loc[to_fix.index, "gene"] = "ORF1a"
+
+            to_fix = coding_sites.query("site==13468")
+            coding_sites.loc[to_fix.index, "codon_position"] = "3;1"
+            coding_sites.loc[to_fix.index, "codon_site"] = "4401;4402"
+            coding_sites.loc[to_fix.index, "gene"] = "ORF1a;ORF1b"
+
+            to_fix = coding_sites.query("13469 <= site <= 13480")
+            coding_sites.loc[to_fix.index, "gene"] = "ORF1a;ORF1b"
+
+            to_fix = coding_sites.query("13481 <= site <= 21552")
+            coding_sites.loc[to_fix.index, "gene"] = "ORF1b"
+
+        self.coding_sites = coding_sites
+        return None
 
     def possible_mutations_df(self, site_map=None, ref_seq=None):
         """
-        See class description.
-        """
+        Return a new dataframe fitting the description of self.reference_mutations_df,
+        based on the given reference sequence and restricted to entries of site_map.
 
-        site_map = self.reference_site_map if site_map is None else site_map
+        Parameters:
+            site_map (pd.DataFrame): A dataframe with columns "site" and "wt_nt". When
+                None, default to self.reference_site_map.
+            ref_seq (str): The reference sequence. When None, default to self.ref_seq.
+
+        See attributes documentation for details.
+        """
+        if site_map is None or len(site_map) == 0:
+            site_map = self.reference_site_map
         ref_seq = self.ref_seq if ref_seq is None else ref_seq
 
-        total_annotated_sites = self.tall_coding_sites.query(
-            f"site.isin({site_map.site.to_list()})"
+        query = f"site.isin({site_map.site.to_list()})"
+        total_annotated_sites = self.tall_coding_sites.query(query)
+        all_muts = all_poss_muts(site_map)
+        all_muts = all_muts.merge(total_annotated_sites, on="site", how="outer")
+
+        # Drop rows with noncoding codon positions now, as these rows give nans.
+        query = "codon_position == 'noncoding'"
+        all_muts.drop(index=all_muts.query(query).index, inplace=True)
+        all_muts.codon_position = all_muts.codon_position.astype(int)
+
+        # Is it possible to vectorize the wt_codon calculation?
+        all_muts["wt_codon"] = (all_muts.site - all_muts.codon_position).apply(
+            lambda x: ref_seq[x : x + 3]
         )
-        all_poss_muts_from_seq = all_poss_muts(site_map)
-
-        ret_poss_muts = all_poss_muts_from_seq.merge(
-            total_annotated_sites, on="site", how="outer"
+        mut_codons = []
+        for j in range(1, 4):
+            rows = all_muts.query("codon_position==@j")
+            slice = rows.wt_codon.str.slice
+            mut_codons.append(slice(stop=j - 1) + rows.mut_nt + slice(start=j))
+        all_muts["mut_codon"] = pd.concat(mut_codons)
+        all_muts["wt_aa"] = all_muts.wt_codon.map(CODON_TABLE)
+        all_muts["mut_aa"] = all_muts.mut_codon.map(CODON_TABLE)
+        all_muts["is_synonymous"] = all_muts.wt_aa == all_muts.mut_aa
+        all_muts["nuc"] = all_muts.wt_nt + all_muts.site.astype(str) + all_muts.mut_nt
+        all_muts["aa"] = (
+            all_muts.wt_aa + all_muts.codon_sites.astype(str) + all_muts.mut_aa
         )
+        all_muts["ID"] = all_muts.gene + "-" + all_muts.aa
 
-        def get_codon(site, codon_position, mut_nt, ref_seq):
-            try:
-                begin = int(site) - int(codon_position)
-                wt_codon = ref_seq[begin : begin + 3]
-                wt_codon_list = list(wt_codon)
-                wt_codon_list[int(codon_position) - 1] = mut_nt
-                mut_codon = "".join(wt_codon_list)
-                # wt_aa, mut_aa = translate(wt_codon), translate(mut_codon)
-                wt_aa, mut_aa = CODON_TABLE[wt_codon], CODON_TABLE[mut_codon]
-                return wt_codon, mut_codon, wt_aa, mut_aa, wt_aa == mut_aa
-            except ValueError:
-                return np.nan, np.nan, np.nan, np.nan, np.nan
+        return all_muts
 
-        # TODO pandarallel
-        ret_poss_muts[
-            ["wt_codon", "mut_codon", "wt_aa", "mut_aa", "is_synonymous"]
-        ] = ret_poss_muts.apply(
-            lambda x: get_codon(x.site, x.codon_position, x.mut_nt, ref_seq),
-            axis=1,
-            result_type="expand",
-        )
-
-        # TODO could just do this in the above apply, in parallel
-        return (
-            ret_poss_muts.assign(
-                nuc=ret_poss_muts.wt_nt
-                + ret_poss_muts.site.astype(str)
-                + ret_poss_muts.mut_nt,
-                aa=ret_poss_muts.wt_aa
-                + ret_poss_muts.codon_sites.astype(str)
-                + ret_poss_muts.mut_aa,
-            )
-            .assign(ID=lambda x: x.gene + "-" + x.aa)
-            .dropna()
-        )
-
-    @lru_cache(maxsize=500)
-    def possible_muts_from_founder_muts(self, founder_muts, slim=False):
+    def possible_muts_from_founder_muts(self, founder_muts):
         """
-        Given a list of mutations in the format `A25G`, return a copy of the
-        the reference_mutations_df dataframe with only the rows that correspond
-        to those mutations.
+        Return a new dataframe constructed by applying mutations to
+        self.reference_mutations_df.
+
+        Parameters:
+            founder_muts (dict): A dictionary of mutations. The keys are integers for
+                the site of a mutation (site indices start at 1); the values are strings
+                for the resulting nucleotide at the site. For example, muts[25] = 'G'
+                is a mutation resulting in 'G' at site 25 (which is at index 24 of
+                sequence).
         """
-        # TODO dumb way to do this, but it works
-        if founder_muts == tuple([]):
-            ret = self.reference_mutations_df.copy()
-            if slim:
-                ret.drop(
-                    [
-                        "site",
-                        # 'wt_nt',
-                        # 'mut_nt',
-                        "gene",
-                        "codon_position",
-                        "codon_sites",
-                        "wt_codon",
-                        "mut_codon",
-                        "wt_aa",
-                        "mut_aa",
-                        # 'is_synonymous',
-                        # 'nuc',
-                        "aa",
-                        # 'ID'
-                    ],
-                    inplace=True,
-                    axis=1,
-                )
-                # ret.dropna(inplace=True)
-            return ret
+        cols_to_keep = ["site", "wt_nt", "mut_nt", "is_synonymous", "ID"]
+        ret = self.reference_mutations_df[cols_to_keep].copy()
+        if len(founder_muts) == 0:
+            return ret, self.ref_seq
 
-        new_site_map = defaultdict(list)
-        new_site_map = {"site": [], "wt_nt": []}
+        # Take all sites with nucleotide mutations, expand to all sites in codons with
+        # nucleotide mutations, and determine nucleotides (after mutation) at the sites.
+        mut_sites = list(founder_muts.keys())
+        query = "site.isin(@mut_sites) & codon_position != 'noncoding'"
+        codon_data = self.tall_coding_sites.query(query)
+        start_positions = codon_data.site - codon_data.codon_position.astype(int) + 1
+        sites = sorted({start + j for start in start_positions for j in range(3)})
+        wt_nts = [
+            founder_muts[site] if site in founder_muts else self.ref_seq[site - 1]
+            for site in sites
+        ]
+        new_site_map = {"site": sites, "wt_nt": wt_nts}
 
-        for mut in founder_muts:
-            _wt, site, mutant = mut[0], int(mut[1:-1]), mut[-1]
-            for idx, coding_sites in self.tall_coding_sites.query(
-                f"site == {site}"
-            ).iterrows():
-                gene = coding_sites.gene  # noqa: F841
-                codon_site = coding_sites.codon_sites  # noqa: F841
-                codon_position = coding_sites.codon_position
-
-                # TODO, could be faster by looking for ID's
-                # instead of double conditional
-                reference_muts_codon_df = self.reference_mutations_df.query(
-                    "gene == @gene & codon_sites == @codon_site"
-                )
-
-                for codon_poss, poss_df in reference_muts_codon_df.groupby(
-                    "codon_position"
-                ):
-                    nt_site = poss_df.site.values[0]
-                    is_nt_mutation = codon_poss == codon_position
-                    if nt_site in new_site_map["site"] and not is_nt_mutation:
-                        # don't re-mutate a site that isn't our founder mutation
-                        # if it's already been added, it should still be correct
-                        continue
-                    elif nt_site in new_site_map["site"] and is_nt_mutation:
-                        # update sitemap
-                        new_site_map["wt_nt"][
-                            new_site_map["site"].index(nt_site)
-                        ] = mutant
-                    else:
-                        new_site_map["site"].append(poss_df.site.values[0])
-                        new_site_map["wt_nt"].append(
-                            poss_df.wt_nt.values[0] if not is_nt_mutation else mutant
-                        )
-        print(new_site_map)
-
-        ret = self.reference_mutations_df.copy()
-
-        # drop all rows with sites that are being redined from the site map
-        # reference_sites = ret.query(f"site.isin({sites})")
-        # TODO do this inline
-        to_drop = self.reference_mutations_df.query(
-            f"site.isin({new_site_map['site']})"
-        ).index
-
+        # Drop all rows with sites that are being redefined by the site map.
+        to_drop = ret.query(f"site.isin({new_site_map['site']})").index
         ret.drop(to_drop, inplace=True)
 
-        # apply muts to get new reference_sequence
+        # Apply muts to get new reference_sequence.
         new_ref_seq = apply_muts(self.ref_seq, founder_muts)
 
         # get the new possible mutations rows for the new site map
@@ -377,128 +416,103 @@ class PossibleMutations:
             pd.DataFrame(new_site_map), new_ref_seq
         )
 
-        # append those to the ret, and return
+        # Append those to the ret, and return.
         ret = pd.concat([ret, new_poss_muts], ignore_index=True)
 
-        if slim:
-            ret.drop(
-                [
-                    "site",
-                    # 'wt_nt',
-                    # 'mut_nt',
-                    "gene",
-                    "codon_position",
-                    "codon_sites",
-                    "wt_codon",
-                    "mut_codon",
-                    "wt_aa",
-                    "mut_aa",
-                    # 'is_synonymous',
-                    # 'nuc',
-                    "aa",
-                    # 'ID'
-                ],
-                inplace=True,
-                axis=1,
+        return ret, new_ref_seq
+
+    def get_actual_expected_for_subtree(
+        self, counts, report_nucleotides=False, context_aware=True
+    ):
+        """
+        Given a dataframe of counts for a single subtree, compute the actual and
+        expected counts for every possible mutation to the founder sequence. Return a
+        dataframe with columns "actual_count" and "expected_count", indexed by the
+        codon-mutation ID (<gene>-<wtaa><codonsite><mutaa>). Thread safe.
+
+        Parameters:
+            count (pd.DataFrame): The dataframe of actual mutation counts.
+            context_aware (bool): When True, the expected counts are based on rates
+                of synonmous mutations grouped by mutation type, motif, secondary
+                rna structure, and global sequence position. These rates are computed
+                in another project. When False, the expected counts are instead the
+                average number of synonmyous mutations grouped by mutation type in the
+                given subtree.
+        """
+        founder_mutations = counts.mutations.iat[0]
+        # Get all possible mutations from the founder.
+        all_possible_founder_muts, ref_seq = self.possible_muts_from_founder_muts(
+            founder_mutations
+        )
+        all_possible_founder_muts["actual_count"] = 0
+        # Stack observed counts with all possible
+        all_possible_counts = pd.concat([all_possible_founder_muts, counts])
+
+        cols_to_keep = {"actual_count"}
+        if context_aware:
+            # Add sequence context feature columns.
+            all_possible_counts = self.add_extra_featues(all_possible_counts, ref_seq)
+            group_keys = [
+                "ID",
+                "site",
+                "mut_type",
+                "wt_nt",
+                "mut_nt",
+                "motif",
+                "unpaired",
+                "nt_site_before_boundary",
+                "is_synonymous",
+            ]
+        else:
+            group_keys = ["ID", "site", "wt_nt", "mut_nt", "is_synonymous"]
+        cols_to_keep.update(group_keys)
+        cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
+        all_possible_counts.drop(columns=cols_to_drop, inplace=True)
+
+        # Combine the actual observed counts with the 0 counts from all possible founder
+        # mutations.
+        all_possible_counts = all_possible_counts.groupby(
+            group_keys, as_index=False
+        ).sum()
+
+        # Compute expected counts.
+        if context_aware:
+            subtree_mut_count = counts.actual_count.sum()
+            merge_keys = ["mut_type", "motif", "unpaired", "nt_site_before_boundary"]
+            all_possible_counts = all_possible_counts.merge(
+                self.rates_df, on=merge_keys
             )
-            # ret.dropna(inplace=True)
-        return ret
+            all_possible_counts.rename(columns={"rate": "expected_count"}, inplace=True)
+            all_possible_counts.expected_count *= subtree_mut_count
+        else:
+            expected_counts = (
+                all_possible_counts.query("is_synonymous")
+                .groupby(by=["wt_nt", "mut_nt"])
+                .agg(expected_count=("actual_count", "mean"))
+                .reset_index()
+            )
+            all_possible_counts = all_possible_counts.merge(
+                expected_counts, on=["wt_nt", "mut_nt"]
+            )
 
+        if report_nucleotides:
+            nuc_counts = all_possible_counts.copy()
+            nuc_counts["syn"] = "syn-"
+            non_syn_entries = nuc_counts.query("~is_synonymous").index
+            nuc_counts.loc[non_syn_entries, "syn"] = "nonsyn-"
+            nuc_counts["ID"] = (
+                "nuc-"
+                + nuc_counts.syn
+                + nuc_counts.wt_nt
+                + nuc_counts.site.astype("str")
+                + nuc_counts.mut_nt
+            )
+            all_possible_counts = pd.concat((all_possible_counts, nuc_counts))
 
-def get_actual_expected_from_subtree(
-    counts, ecc, base_changes, window_founder_muts, founder_child_threshold
-):
-    """
-    Given the a single group of subtree counts, and the respective
-    founder mutations dataframe (must contain subtree founder entry),
-    as well as an ExpectedCountsCalculator initialized from the reference
-    sequence, compute the expected counts for every possible
-    mutation to the founder sequence. Return a dataframe with columns
-    Actual, and Expected, indexed by the codon-mutation ID
-    (<gene>-<wtaa><codonsite><mutaa>).
+        cols_to_keep = {"ID", "actual_count", "expected_count"}
+        cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
+        all_possible_counts.drop(columns=cols_to_drop, inplace=True)
 
-    This function was designed to be parallelized across
-    all trees in a given window.
-    """
+        all_possible_counts = all_possible_counts.groupby("ID").sum()
 
-    # get unique founder
-    uniq_founders = counts.founder_id.unique()
-    assert len(uniq_founders) == 1
-    founder = uniq_founders[0]
-    subtree_founder_muts = window_founder_muts.query("founder_id == @founder")
-
-    # threshold
-    if subtree_founder_muts.subtree_size.values[0] <= founder_child_threshold:
-        return pd.DataFrame(columns=["ID", "Actual", "Expected"]).astype(
-            {"Actual": int, "Expected": float}
-        )
-
-    # get all possible mutations from a founder, assign count of zero
-    all_possible_founder_muts = (
-        ecc.possible_muts_from_founder_muts(
-            tuple(subtree_founder_muts.mutations.values[0].split()), slim=True
-        )
-        .dropna()
-        .assign(count=0, founder_id=founder)
-    )
-    all_possible_founder_muts["is_synonymous"] = all_possible_founder_muts[
-        "is_synonymous"
-    ].astype(bool)
-
-    # merge the counts into all possible
-    group_keys = ["ID", "nuc", "wt_nt", "mut_nt", "founder_id", "is_synonymous"]
-    all_possible_counts = (
-        pd.concat([all_possible_founder_muts, counts])
-        .groupby(group_keys, as_index=False)
-        .sum()
-    )
-
-    # opt 2
-    # Make a dictionary of:
-    #  key: (wt_nt, mut_nt)
-    #  value:
-    #    (
-    #      total number of possible mutations with this base change,
-    #      expected value for mut with this base change
-    #    )
-    E = {}
-    for base_change in base_changes:
-        # all possible mutations for this base change
-        # Here we are doing an intermediary calculation to get the
-        # total number of base changes for adding expected values to
-        # the dataframe more quickly
-        base_change_muts = all_possible_counts.query(
-            f"wt_nt == '{base_change[0]}' & mut_nt == '{base_change[1]}'"
-        )
-
-        # now we can subset that to just synonymous mutations for
-        # the expected calulation.
-        synonymous_base_change_muts = base_change_muts.query("is_synonymous")
-
-        E[base_change] = (
-            base_change_muts["count"].shape[0],
-            synonymous_base_change_muts["count"].mean(),
-        )
-
-    # now, since we know the total number of each mutation type, we can
-    # assign values to the 'all possible' dataframe more quickly by sorting
-    # rows in the df by the keys in the E dictionary, and then assigning the expected
-    # values simply by repeating the expected value for each mutation type
-    # into a flattened array.
-    return (
-        all_possible_counts.sort_values(["wt_nt", "mut_nt"])
-        .assign(
-            Expected=np.hstack([[E[key][1]] * E[key][0] for key in sorted(E.keys())])
-        )
-        .drop(
-            [
-                c
-                for c in all_possible_counts.columns
-                if c not in ["ID", "count", "Expected"]
-            ],
-            axis=1,
-        )
-        .rename({"count": "Actual"}, axis=1)
-        .groupby("ID", as_index=False)
-        .sum()
-    )
+        return all_possible_counts
