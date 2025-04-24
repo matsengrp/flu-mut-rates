@@ -1,37 +1,246 @@
-# import pandas as pd
 from pandas import DataFrame as DF
 from collections import defaultdict, Counter
 import bte
 from ExpectedCalc import PossibleMutations, apply_muts
+from time import time
+from multiprocessing import Pool
+from math import ceil
 
 # from MATWrapper import apply_muts
 
 
-rerooted_tree_paths = snakemake.input.rerooted_tree_paths
-coding_site_paths = snakemake.input.coding_site_paths
-fasta_paths = snakemake.input.fasta_paths
-gtf_paths = snakemake.input.gtf_paths
-bad_sites_paths = snakemake.input.bad_sites_paths
-secondary_structs = snakemake.input.secondary_structs
-rates_tables = snakemake.input.rates_tables
-nuc_count_paths = snakemake.output.nuc_count_paths
-nuc_conservation_paths = snakemake.output.nuc_conservation_paths
-codon_count_paths = snakemake.output.codon_count_paths
-codon_conservation_paths = snakemake.output.codon_conservation_paths
-possible_muts_paths = snakemake.output.possible_muts_paths
-all_count_paths = snakemake.output.all_count_paths
+class CountsHelper:
+    """...handles calculating and writing out mutation counts and conservation per sites..."""
 
+    def __init__(
+        self,
+        tree_path,
+        coding_site_path,
+        fasta_path,
+        gtf_path,
+        bad_sites,
+        secondary,
+        rates,
+    ):
+        self.poss_muts = PossibleMutations(
+            fasta_path, coding_site_path, bad_sites, secondary, rates, False
+        )
+        self.ref_seq = self.poss_muts.ref_seq
 
-def get_3mer_seq_context(nt_site, seq):
-    return seq[nt_site - 2 : nt_site + 1]
+        ref_df = self.poss_muts.possible_mutations_df()
+        self.key_names = (*ref_df.columns, "parent_motif")
+        ref_df["gene_codon_site_id"] = ref_df["gene"] + "-" + ref_df["codon_sites"]
+        ref_df["seq_context"] = ref_df.site.apply(self.ref_motif)
+        self.ref_df = ref_df
 
+        self.tree = bte.MATree(tree_path)
+        self.translations = defaultdict(list, self.tree.translate(gtf_path, fasta_path))
+        self.nodes = self.tree.depth_first_expansion()
+        self.int_nodes = [n for n in self.nodes if not n.is_leaf()]
+        self.n_nodes = len(self.nodes)
+        self.n_int_nodes = len(self.int_nodes)
 
-def fails_filters(node, ref_seq, nt_muts, codon_muts):
-    fail = node.parent is None
-    fail |= len(nt_muts) > 4
-    fail |= sum(ref_seq[int(mut[1:-1]) - 1] == mut[-1] for mut in nt_muts) > 1
-    fail |= len({(mut.gene, mut.aa_index) for mut in codon_muts}) < len(codon_muts)
-    return fail
+    def ref_motif(self, s):
+        return self.ref_seq[s - 2 : s + 1]
+
+    def fails_filters(self, nt_muts, codon_muts):
+        fail = len(nt_muts) > 4
+        fail |= len(nt_muts) == 0
+        fail |= sum(self.ref_seq[int(mut[1:-1]) - 1] == mut[-1] for mut in nt_muts) > 1
+        fail |= len({(mut.gene, mut.aa_index) for mut in codon_muts}) < len(codon_muts)
+        return fail
+
+    def count_mutations_from_parent(self, parent):
+        parent_node_haplotype = self.tree.get_haplotype(parent.id)
+        p_muts = {int(mut[1:-1]): mut[-1] for mut in parent_node_haplotype}
+
+        # If speed is an issue, we can rewrite the possible_muts_from_founder_muts
+        # method to avoid dataframes.
+        counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)
+        parent_motif = lambda s: parent_seq[s - 2 : s + 1]
+        counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
+        counts_df["actual_count"] = 0
+        counts_df["branch_length"] = 0
+        pcps = (parent.id, parent_seq, [])
+
+        n_filtered = 0
+        for node in parent.children:
+            nt_muts = node.mutations
+            codon_muts = self.translations[node.id]
+            if self.fails_filters(nt_muts, codon_muts):
+                continue
+
+            n_filtered += 1
+            pcps[2].append((node.id, nt_muts))
+            counts_df["branch_length"] += len(nt_muts)
+            to_increment = counts_df.query("nuc.isin(@node.mutations)").index
+            counts_df.loc[to_increment, "actual_count"] += 1
+
+        if n_filtered != 0:
+            records = counts_df.to_records(index=False).tolist()
+            counts_dict = Counter({x[:-2]: x[-2] for x in records})
+            branches_dict = Counter({x[:-2]: x[-1] for x in records})
+        else:
+            counts_dict, branches_dict = Counter(), Counter()
+
+        return n_filtered, counts_dict, branches_dict, pcps
+
+    def count_sites_on_node(self, node):
+        """...return Counter where keys are nucleutide sites or codon sites
+        ...with a mutation at this node and those sites...
+        """
+        node_haplotype = self.tree.get_haplotype(node.id)
+        nt_site_count = Counter([mut[1:-1] for mut in node_haplotype])
+        view = self.ref_df.query("nuc.isin(@node_haplotype)")
+        codon_site_count = Counter(set(view.gene_codon_site_id))
+        return nt_site_count, codon_site_count
+
+    def mut_counters_to_df(self, actual_counts, branch_lengths):
+        """
+        ...turn a counter with keys as tuples of self.key_names and values for column name
+        ....
+        ...into a df with columns key names and column name...
+        """
+        zipped = zip(actual_counts.items(), branch_lengths.values())
+        data = [(*k, v, w) for (k, v), w in zipped]
+        columns = [*self.key_names, "actual_count", "branch_length"]
+        the_df = DF(data, columns=columns)
+        return the_df
+
+    def site_counter_to_df(self, counter, n_filtered):
+        """
+        ...turn a counter with keys as site s and values for column name
+        ....
+        ...into a df with columns key names and column name...
+        """
+        the_df = DF.from_dict(counter, orient="index")
+        the_df.reset_index(inplace=True)
+        the_df.rename(columns={"index": "site", 0: "mut_count"}, inplace=True)
+        the_df["frac_mut"] = the_df.mut_count / n_filtered
+        the_df["frac_cons"] = 1 - the_df.frac_mut
+        the_df.sort_values("mut_count", ascending=False, inplace=True)
+        return the_df
+
+    def compute_conservation_on_tree(self):
+        """
+        ...
+        """
+        # Use counters rather than a dataframe, since summing together many.
+        n_filtered, nt_site_counter, codon_site_counter = 0, Counter(), Counter()
+        t0 = -time()
+        for i, node in enumerate(self.int_nodes, 1):
+            nt_muts = node.mutations
+            codon_muts = self.translations[node.id]
+            if self.fails_filters(nt_muts, codon_muts):
+                continue
+            n_filtered += 1
+
+            nt_site_count, codon_site_count = self.count_sites_on_node(node)
+            nt_site_counter.update(nt_site_count)
+            codon_site_counter.update(codon_site_count)
+            if i % 1000 == 0:
+                print(f"{i} nodes processed in {t0+time():0.1f} seconds")
+
+        nt_site_df = self.site_counter_to_df(nt_site_counter, n_filtered)
+        codon_site_df = self.site_counter_to_df(codon_site_counter, n_filtered)
+        return n_filtered, nt_site_df, codon_site_df
+
+    def count_mutations_on_tree(self):
+        """
+        # Cycle over nodes and record codon mutation counts
+        ...returns int, Counter, Counter
+        """
+        # Use counters rather than a dataframe, since summing together many.
+        n_filtered, all_actual_counts, all_branch_lengths = 0, Counter(), Counter()
+        all_pcps = []
+        t0 = -time()
+        for i, node in enumerate(self.int_nodes, 1):
+            count, actual_counts, branch_lens, pcps = self.count_mutations_from_parent(
+                node
+            )
+            n_filtered += count
+            all_actual_counts.update(actual_counts)
+            all_branch_lengths.update(branch_lens)
+            if count != 0:
+                all_pcps.append(pcps)
+
+            if i % 1000 == 0:
+                print(f"{i} nodes processed in {t0+time():0.1f} seconds")
+        all_counts_df = self.mut_counters_to_df(all_actual_counts, all_branch_lengths)
+        all_pcps_df = self.pcp_list_to_df(all_pcps)
+        return n_filtered, all_counts_df, all_pcps_df
+
+    def parallel_count_mutations_on_tree(self, processes=8, batch_size=1000):
+        """
+        ...
+        """
+        raise NotImplementedError(
+            "Can't multiprocess with bte tree, need to do extra book keeping."
+        )
+        n_filtered, all_actual_counts, all_branch_lengths = 0, Counter(), Counter()
+        batch_count = ceil(self.n_int_nodes / batch_size)
+        t0 = -time()
+        with Pool(processes=processes) as pool:
+            for b in range(batch_count):
+                if b == batch_count - 1:
+                    nodes = self.int_nodes[b * batch_size : (b + 1) * batch_size]
+                else:
+                    nodes = self.int_nodes[b * batch_size :]
+                batch_result = pool.map(self.count_mutations_from_parent, nodes)
+                for count, actual_counts, branch_lens in batch_result:
+                    n_filtered += count
+                    all_actual_counts.update(actual_counts)
+                    all_branch_lengths.update(branch_lens)
+
+            print(
+                f"{b} batches of {batch_size} nodes processed in {t0+time():0.1f} seconds"
+            )
+        all_counts_df = self.mut_counters_to_df(all_actual_counts, all_branch_lengths)
+        return n_filtered, all_counts_df
+
+    def pcp_list_to_df(self, pcps):
+        mut_dict = lambda muts: {int(mut[1:-1]): mut[-1] for mut in muts}
+        child_seq = lambda seq, muts: apply_muts(seq, mut_dict(muts))
+        cols = ["parent_name", "child_name", "parent", "child", "branch_length"]
+        rows = (
+            (p_id, c_id, p_seq, child_seq(p_seq, c_muts), len(c_muts))
+            for (p_id, p_seq, child_entries) in pcps
+            for c_id, c_muts in child_entries
+        )
+        the_df = DF(rows, columns=cols)
+        return the_df
+
+    def make_and_write_all_counts(
+        self,
+        all_counts_path,
+        all_pcps_path,
+        nuc_conserv_path,
+        codon_conserv_path,
+        tree_size_path,
+    ):
+        print(f"Number of nodes in tree: {self.n_nodes}")
+        print(f"Number of internal nodes in tree: {self.n_int_nodes}")
+
+        print(f"Counting mutations on tree...")
+        n_filtered, all_counts_df, all_pcps_df = self.count_mutations_on_tree()
+        print(f"Number of nodes passing filter: {n_filtered}")
+
+        print(f"Calculating site conservation on tree...")
+        n_int_filtered, nt_site_df, codon_site_df = self.compute_conservation_on_tree()
+        print(f"Number of internal nodes passing filter: {n_filtered}")
+
+        all_counts_df.to_csv(all_counts_path)
+        all_pcps_df.to_csv(all_pcps_path)
+        nt_site_df.to_csv(nuc_conserv_path)
+        codon_site_df.to_csv(codon_conserv_path)
+
+        with open(tree_size_path, "w") as the_file:
+            header = "nodes,internal_nodes,filtered_nodes,filtered_internal_nodes\n"
+            row = f"{self.n_nodes},{self.n_int_nodes},{n_filtered},{n_int_filtered}\n"
+            the_file.write(header)
+            the_file.write(row)
+
+        return None
 
 
 def write_counts(
@@ -42,136 +251,50 @@ def write_counts(
     bad_sites,
     secondary,
     rates,
-    nuc_count_path,
+    all_counts_path,
+    all_pcps_path,
     nuc_conserv_path,
-    codon_count_path,
     codon_conserv_path,
-    possible_muts_path,
-    all_count_path,
+    tree_size_path,
 ):
-    possible_muts = PossibleMutations(
-        fasta_path, coding_site_path, bad_sites, secondary, rates, False
+    p1 = tree_path, coding_site_path, fasta_path, gtf_path, bad_sites, secondary, rates
+    p2 = (
+        all_counts_path,
+        all_pcps_path,
+        nuc_conserv_path,
+        codon_conserv_path,
+        tree_size_path,
     )
-    ref_seq = possible_muts.ref_seq
-    ref_df = possible_muts.possible_mutations_df()
-    ref_df.rename(columns={"codon_sites": "codon_site"}, inplace=True)
-    ref_df.drop(columns=["ID"], inplace=True)
-    ref_df["gene_codon_site_id"] = ref_df["gene"] + "-" + ref_df["codon_site"]
-    ref_df["seq_context"] = ref_df.site.apply(get_3mer_seq_context, args=(ref_seq,))
-    ref_df.to_csv(possible_muts_path)
-
-    tree = bte.MATree(tree_path)
-    translations = tree.translate(gtf_path, fasta_path)
-
-    # Cycle over nodes and record codon mutation counts
-    nodes = tree.depth_first_expansion()
-    print("Number of nodes in tree:", len(nodes))
-    nt_mut_counts = defaultdict(int)
-    codon_mut_counts = defaultdict(int)
-    conserv_nt_ctr = Counter()
-    conserv_codon_ctr = Counter()
-    n_nodes_passing_filters = 0
-    n_internal_nodes_analyzed = 0
-    for i, node in enumerate(nodes):
-        # Get lists of nt-level and codon-level mutations
-        nt_muts = node.mutations
-        codon_muts = translations[node.id] if node.id in translations else []
-        if fails_filters(node, ref_seq, nt_muts, codon_muts):
-            continue
-
-        n_nodes_passing_filters += 1
-
-        # Reconstruct the parent node's genome for use in getting each mutation's
-        # sequence context
-        node_haplotype = tree.get_haplotype(node.id)
-        parent_node_haplotype = tree.get_haplotype(node.parent.id)
-        parent_muts = {int(mut[1:-1]): mut[-1] for mut in parent_node_haplotype}
-        parent_node_seq = apply_muts(ref_seq, parent_muts)
-
-        # Record counts of nt-level mutations
-        for nt_mut in nt_muts:
-            seq_context = get_3mer_seq_context(int(nt_mut[1:-1]), parent_node_seq)
-            ref_seq_context = get_3mer_seq_context(int(nt_mut[1:-1]), ref_seq)
-            nt_mut_id = f"{nt_mut}-{seq_context}-{ref_seq_context}"
-            nt_mut_counts[nt_mut_id] += 1
-
-        # Record counts of codon-level mutations
-        for codon_mut in codon_muts:
-            nt_mut = codon_mut.nuc
-            seq_context = get_3mer_seq_context(int(nt_mut[1:-1]), parent_node_seq)
-            ref_seq_context = get_3mer_seq_context(int(nt_mut[1:-1]), ref_seq)
-            codon_mut_id = f"{codon_mut.gene}-{codon_mut.aa_index}-{codon_mut.original_codon}-{codon_mut.alternative_codon}-{seq_context}-{ref_seq_context}"
-            codon_mut_counts[codon_mut_id] += 1
-
-        # Record rolling counts of all nt-level and codon-level mutations in a node
-        # relative to the reference sequence in order to determine the level of
-        # conservation at each site. Only do this for internal nodes.
-        if not node.is_leaf():
-            n_internal_nodes_analyzed += 1
-            node_counts = Counter([mut[1:-1] for mut in node_haplotype])
-            conserv_nt_ctr += node_counts
-            q = "nuc.isin(@node_haplotype)"
-            node_counts = Counter(set(ref_df.query(q).gene_codon_site_id))
-            conserv_codon_ctr += node_counts
-
-        if i % 10000 == 0:
-            print(i)
-
-    print("Number of nodes that passed filters:", n_nodes_passing_filters)
-    print("Number of internal nodes analyzed:", n_internal_nodes_analyzed)
-
-    # Store mutation counts in dataframes and write out.
-    cols = ["nt_mut_id", "counts"]
-    nt_mut_counts_df = DF.from_records(list(nt_mut_counts.items()), columns=cols)
-    new_cols = ["nt_mut", "mut_seq_context", "ref_seq_context"]
-    new_vals = nt_mut_counts_df["nt_mut_id"].str.extract("(\w+)-(\w+)-(\w+)")
-    nt_mut_counts_df[new_cols] = new_vals
-    nt_mut_counts_df.drop(columns=["nt_mut_id"], inplace=True)
-    nt_mut_counts_df.to_csv(nuc_count_path, index=False)
-
-    cols = ["codon_mut_id", "counts"]
-    codon_mut_counts_df = DF.from_records(list(codon_mut_counts.items()), columns=cols)
-    new_cols = ["gene", "codon_site", "wt_codon", "mut_codon", "mut_seq_context"]
-    new_cols.append("ref_seq_context")
-    id_format = "(\w+)-(\d+)-(\w+)-(\w+)-(\w+)-(\w+)"
-    new_vals = codon_mut_counts_df["codon_mut_id"].str.extract(id_format)
-    codon_mut_counts_df[new_cols] = new_vals
-    codon_mut_counts_df.drop(columns=["codon_mut_id"], inplace=True)
-    codon_mut_counts_df.to_csv(codon_count_path, index=False)
-
-    join_cols = ["codon_site", "wt_codon", "mut_codon", "gene"]
-    all_counts_df = ref_df.merge(codon_mut_counts_df, on=join_cols, how="left")
-    all_counts_df["mut_type"] = all_counts_df.wt_nt + all_counts_df.mut_nt
-    all_counts_df["codon_site"] = all_counts_df.codon_site.astype(int)
-    all_counts_df["counts"] = all_counts_df.counts.fillna(0).astype(int)
-    all_counts_df.to_csv(all_count_path, index=False)
-
-    pairs = (conserv_nt_ctr, nuc_conserv_path), (conserv_codon_ctr, codon_conserv_path)
-    for ctr, path in pairs:
-        the_df = DF.from_dict(ctr, orient="index")
-        the_df.reset_index(inplace=True)
-        the_df.rename(columns={"index": "site", 0: "count"}, inplace=True)
-        the_df["frac_mut"] = the_df["count"] / n_internal_nodes_analyzed
-        the_df["frac_cons"] = 1 - the_df["frac_mut"]
-        the_df.sort_values("count", ascending=False, inplace=True)
-        the_df.to_csv(path, index=False)
-
+    CountsHelper(*p1).make_and_write_all_counts(*p2)
     return None
 
 
-params = zip(
-    rerooted_tree_paths,
-    coding_site_paths,
-    fasta_paths,
-    gtf_paths,
-    bad_sites_paths,
-    secondary_structs,
-    rates_tables,
-    nuc_count_paths,
-    nuc_conservation_paths,
-    codon_count_paths,
-    codon_conservation_paths,
-    possible_muts_paths,
-    all_count_paths,
-)
-any(write_counts(*p) for p in params)
+if __name__ == "__main__":
+    rerooted_tree_paths = snakemake.input.rerooted_tree_paths
+    coding_site_paths = snakemake.input.coding_site_paths
+    fasta_paths = snakemake.input.fasta_paths
+    gtf_paths = snakemake.input.gtf_paths
+    bad_sites_paths = snakemake.input.bad_sites_paths
+    secondary_structs = snakemake.input.secondary_structs
+    rates_tables = snakemake.input.rates_tables
+    all_counts_paths = snakemake.output.all_counts_paths
+    all_pcps_paths = snakemake.output.all_pcps_paths
+    nuc_conservation_paths = snakemake.output.nuc_conservation_paths
+    codon_conservation_paths = snakemake.output.codon_conservation_paths
+    tree_size_paths = snakemake.output.tree_size_paths
+
+    params = zip(
+        rerooted_tree_paths,
+        coding_site_paths,
+        fasta_paths,
+        gtf_paths,
+        bad_sites_paths,
+        secondary_structs,
+        rates_tables,
+        all_counts_paths,
+        all_pcps_paths,
+        nuc_conservation_paths,
+        codon_conservation_paths,
+        tree_size_paths,
+    )
+    any(write_counts(*p) for p in params)

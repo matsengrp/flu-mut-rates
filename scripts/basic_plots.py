@@ -29,7 +29,7 @@ def make_plots(all_counts_path, boxplot_path, mut_type_dir):
 
 def plot_counts_by_mut_type(counts_df, outpath):
     plt.figure(figsize=[8, 3])
-    sns.boxplot(x="mut_type", y="counts", data=counts_df, whis=(5, 95))
+    sns.boxplot(x="mut_type", y="actual_count", data=counts_df, whis=(5, 95))
     plt.yscale("log")
     sns.despine()
     plt.savefig(outpath)
@@ -40,7 +40,7 @@ def plot_counts_by_mut_type(counts_df, outpath):
 def plot_counts_for_mut_type(counts_df, mut_type, outpath):
     data = counts_df.query("mut_type==@mut_type")
     plt.figure(figsize=[12, 3])
-    sns.scatterplot(x="site", y="counts", data=data, alpha=0.5)
+    sns.scatterplot(x="site", y="actual_count", data=data, alpha=0.5)
     plt.title(f"{mut_type}, N={len(data)}")
     sns.despine()
     plt.savefig(outpath)
