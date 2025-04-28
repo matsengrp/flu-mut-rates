@@ -7,14 +7,10 @@ import os
 sns.set_theme(font_scale=1.0, style="ticks", palette="colorblind")
 
 
-all_count_paths = snakemake.input.all_count_paths
-boxplot_paths = snakemake.output.boxplot_paths
-mut_type_dirs = snakemake.params.mut_type_dirs
-
-
 def make_plots(all_counts_path, boxplot_path, mut_type_dir):
     syn_counts_df = pd.read_csv(all_counts_path)
-    syn_counts_df.query("is_synonymous == True", inplace=True)
+    syn_counts_df.query("is_synonymous == True and actual_count>0", inplace=True)
+    syn_counts_df["mut_type"] = syn_counts_df.wt_nt + syn_counts_df.mut_nt
     syn_counts_df.sort_values("mut_type", inplace=True)
 
     plot_counts_by_mut_type(syn_counts_df, boxplot_path)
@@ -48,4 +44,11 @@ def plot_counts_for_mut_type(counts_df, mut_type, outpath):
     return None
 
 
-any(make_plots(*p) for p in zip(all_count_paths, boxplot_paths, mut_type_dirs))
+if __nbame__ == "__main__":
+    # In main hook, so rest of file can be imported.
+
+    all_counts_paths = snakemake.input.all_counts_paths
+    boxplot_paths = snakemake.output.boxplot_paths
+    mut_type_dirs = snakemake.params.mut_type_dirs
+
+    any(make_plots(*p) for p in zip(all_counts_paths, boxplot_paths, mut_type_dirs))
