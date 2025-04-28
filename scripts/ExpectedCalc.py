@@ -386,8 +386,9 @@ class PossibleMutations:
                 is a mutation resulting in 'G' at site 25 (which is at index 24 of
                 sequence).
         """
-        cols_to_keep = ["site", "wt_nt", "mut_nt", "is_synonymous", "ID"]
-        ret = self.reference_mutations_df[cols_to_keep].copy()
+        # cols_to_keep = ["site", "wt_nt", "mut_nt", "is_synonymous", "ID"]
+        # ret = self.reference_mutations_df[cols_to_keep].copy()
+        ret = self.reference_mutations_df.copy()
         if len(founder_muts) == 0:
             return ret, self.ref_seq
 
