@@ -139,25 +139,25 @@ def apply_muts(sequence, muts):
     return "".join(substrings)
 
 
-def wide_codon_sites_to_tall(coding_sites):
-    """
-    Given a dataframe like PossibleMutations.coding_sites, where each row lists all
-    genes for a site, return a new dataframe like PossibleMutations.tall_coding_sites,
-    where sites for overlapping genes are are listed as multiple rows.
-    """
-    # Maybe not the most efficient way, but this function is only called once (at
-    # instantiation of PossibleMutations).
-    coding_sites_tall = defaultdict(list)
-    for row_idx, data in coding_sites.iterrows():
-        genes = data.gene.split(";")
-        codon_poss = data.codon_position.split(";")
-        codon_sites = data.codon_site.split(";")
-        for features in zip(genes, codon_poss, codon_sites):
-            coding_sites_tall["site"].append(data.site)
-            coding_sites_tall["gene"].append(features[0])
-            coding_sites_tall["codon_position"].append(features[1])
-            coding_sites_tall["codon_sites"].append(features[2])
-    return pd.DataFrame(coding_sites_tall)
+# def wide_codon_sites_to_tall(coding_sites):
+#     """
+#     Given a dataframe like PossibleMutations.coding_sites, where each row lists all
+#     genes for a site, return a new dataframe like PossibleMutations.tall_coding_sites,
+#     where sites for overlapping genes are are listed as multiple rows.
+#     """
+#     # Maybe not the most efficient way, but this function is only called once (at
+#     # instantiation of PossibleMutations).
+#     coding_sites_tall = defaultdict(list)
+#     for row_idx, data in coding_sites.iterrows():
+#         genes = data.gene.split(";")
+#         codon_poss = data.codon_position.split(";")
+#         codon_sites = data.codon_site.split(";")
+#         for features in zip(genes, codon_poss, codon_sites):
+#             coding_sites_tall["site"].append(data.site)
+#             coding_sites_tall["gene"].append(features[0])
+#             coding_sites_tall["codon_position"].append(features[1])
+#             coding_sites_tall["codon_sites"].append(features[2])
+#     return pd.DataFrame(coding_sites_tall)
 
 
 class PossibleMutations:
@@ -246,18 +246,19 @@ class PossibleMutations:
         self,
         ref_seq: str,
         coding_sites: str,
-        bad_sites_path: str,
-        secondary_struct: str,
-        rates_table: str,
+        # bad_sites_path: str,
+        # secondary_struct: str,
+        # rates_table: str,
         gene_fix=True,
     ):
         self.gene_fix = gene_fix
         self.ref_seq = load_reference_from_fasta(ref_seq)
-        self.basepair_df = pd.read_csv(secondary_struct)
-        self.rates_df = pd.read_csv(rates_table)
-        self.boundary_df = self.rates_df.groupby("mut_type").nt_site_boundary.first()
+        # self.basepair_df = pd.read_csv(secondary_struct)
+        # self.rates_df = pd.read_csv(rates_table)
+        # self.boundary_df = self.rates_df.groupby("mut_type").nt_site_boundary.first()
+
         # Now that we've recorded the site boundaries, we can drop them from rates_df.
-        self.rates_df.drop(columns=["nt_site_boundary"], inplace=True)
+        # self.rates_df.drop(columns=["nt_site_boundary"], inplace=True)
 
         self.set_coding_sites_df(coding_sites)
         if len(self.coding_sites) != len(self.ref_seq):
@@ -268,36 +269,37 @@ class PossibleMutations:
         if not np.all(self.coding_sites.site == np.arange(1, len(self.ref_seq) + 1)):
             raise ValueError("codon sites must be in order of reference sequence")
 
-        self.tall_coding_sites = wide_codon_sites_to_tall(self.coding_sites)
-        self.load_bad_sites_from_file(bad_sites_path)
+        # TODO simplify this if it works
+        self.tall_coding_sites = self.coding_sites
+        # self.load_bad_sites_from_file(bad_sites_path)
         self.reference_site_map = pd.DataFrame(
             {"site": np.arange(1, len(self.ref_seq) + 1), "wt_nt": list(self.ref_seq)}
         )
-        self.reference_site_map.query("~site.isin(@self.bad_site_list)", inplace=True)
+        # self.reference_site_map.query("~site.isin(@self.bad_site_list)", inplace=True)
         self.reference_mutations_df = self.possible_mutations_df()
 
-    def load_bad_sites_from_file(self, bad_sites_path):
-        """Load a list of bad sites from file."""
-        with open(bad_sites_path) as the_file:
-            self.bad_site_list = sorted(map(int, map(str.strip, the_file)))
-        return None
+    # def load_bad_sites_from_file(self, bad_sites_path):
+    #     """Load a list of bad sites from file."""
+    #     with open(bad_sites_path) as the_file:
+    #         self.bad_site_list = sorted(map(int, map(str.strip, the_file)))
+    #     return None
 
-    def add_extra_featues(self, the_df, ref_seq):
-        """
-        Given a dataframe with columns "site", "wt_nt", and "mut_nt" and a reference
-        sequence, return a new dataframe with additional columns  "mut_type", "motif"
-        (3-mer local sequence context), "unpaired" (secondary rna structure),
-        "nt_site_boundary" (the site boundary for global context), and
-        "nt_site_before_boundary" (whether or not the site is before the boundary).
-        """
-        motif_at_site = lambda s: ref_seq[s - 2 : s + 1]
-        the_df = the_df.merge(self.basepair_df, on="site")
-        the_df["motif"] = the_df.site.apply(motif_at_site)
-        the_df["mut_type"] = the_df.wt_nt + the_df.mut_nt
-        the_df = the_df.merge(self.boundary_df, on="mut_type")
-        the_df["nt_site_before_boundary"] = the_df.site < the_df.nt_site_boundary
+    # def add_extra_featues(self, the_df, ref_seq):
+    #     """
+    #     Given a dataframe with columns "site", "wt_nt", and "mut_nt" and a reference
+    #     sequence, return a new dataframe with additional columns  "mut_type", "motif"
+    #     (3-mer local sequence context), "unpaired" (secondary rna structure),
+    #     "nt_site_boundary" (the site boundary for global context), and
+    #     "nt_site_before_boundary" (whether or not the site is before the boundary).
+    #     """
+    #     motif_at_site = lambda s: ref_seq[s - 2 : s + 1]
+    #     the_df = the_df.merge(self.basepair_df, on="site")
+    #     the_df["motif"] = the_df.site.apply(motif_at_site)
+    #     the_df["mut_type"] = the_df.wt_nt + the_df.mut_nt
+    #     the_df = the_df.merge(self.boundary_df, on="mut_type")
+    #     the_df["nt_site_before_boundary"] = the_df.site < the_df.nt_site_boundary
 
-        return the_df
+    #     return the_df
 
     def set_coding_sites_df(self, file_path):
         """
@@ -368,7 +370,7 @@ class PossibleMutations:
         all_muts["is_synonymous"] = all_muts.wt_aa == all_muts.mut_aa
         all_muts["nuc"] = all_muts.wt_nt + all_muts.site.astype(str) + all_muts.mut_nt
         all_muts["aa"] = (
-            all_muts.wt_aa + all_muts.codon_sites.astype(str) + all_muts.mut_aa
+            all_muts.wt_aa + all_muts.codon_site.astype(str) + all_muts.mut_aa
         )
         all_muts["ID"] = all_muts.gene + "-" + all_muts.aa
 
@@ -422,98 +424,98 @@ class PossibleMutations:
 
         return ret, new_ref_seq
 
-    def get_actual_expected_for_subtree(
-        self, counts, report_nucleotides=False, context_aware=True
-    ):
-        """
-        Given a dataframe of counts for a single subtree, compute the actual and
-        expected counts for every possible mutation to the founder sequence. Return a
-        dataframe with columns "actual_count" and "expected_count", indexed by the
-        codon-mutation ID (<gene>-<wtaa><codonsite><mutaa>). Thread safe.
+    # def get_actual_expected_for_subtree(
+    #     self, counts, report_nucleotides=False, context_aware=True
+    # ):
+    #     """
+    #     Given a dataframe of counts for a single subtree, compute the actual and
+    #     expected counts for every possible mutation to the founder sequence. Return a
+    #     dataframe with columns "actual_count" and "expected_count", indexed by the
+    #     codon-mutation ID (<gene>-<wtaa><codonsite><mutaa>). Thread safe.
 
-        Parameters:
-            count (pd.DataFrame): The dataframe of actual mutation counts.
-            context_aware (bool): When True, the expected counts are based on rates
-                of synonmous mutations grouped by mutation type, motif, secondary
-                rna structure, and global sequence position. These rates are computed
-                in another project. When False, the expected counts are instead the
-                average number of synonmyous mutations grouped by mutation type in the
-                given subtree.
-        """
-        founder_mutations = counts.mutations.iat[0]
-        # Get all possible mutations from the founder.
-        all_possible_founder_muts, ref_seq = self.possible_muts_from_founder_muts(
-            founder_mutations
-        )
-        all_possible_founder_muts["actual_count"] = 0
-        # Stack observed counts with all possible
-        all_possible_counts = pd.concat([all_possible_founder_muts, counts])
+    #     Parameters:
+    #         count (pd.DataFrame): The dataframe of actual mutation counts.
+    #         context_aware (bool): When True, the expected counts are based on rates
+    #             of synonmous mutations grouped by mutation type, motif, secondary
+    #             rna structure, and global sequence position. These rates are computed
+    #             in another project. When False, the expected counts are instead the
+    #             average number of synonmyous mutations grouped by mutation type in the
+    #             given subtree.
+    #     """
+    #     founder_mutations = counts.mutations.iat[0]
+    #     # Get all possible mutations from the founder.
+    #     all_possible_founder_muts, ref_seq = self.possible_muts_from_founder_muts(
+    #         founder_mutations
+    #     )
+    #     all_possible_founder_muts["actual_count"] = 0
+    #     # Stack observed counts with all possible
+    #     all_possible_counts = pd.concat([all_possible_founder_muts, counts])
 
-        cols_to_keep = {"actual_count"}
-        if context_aware:
-            # Add sequence context feature columns.
-            all_possible_counts = self.add_extra_featues(all_possible_counts, ref_seq)
-            group_keys = [
-                "ID",
-                "site",
-                "mut_type",
-                "wt_nt",
-                "mut_nt",
-                "motif",
-                "unpaired",
-                "nt_site_before_boundary",
-                "is_synonymous",
-            ]
-        else:
-            group_keys = ["ID", "site", "wt_nt", "mut_nt", "is_synonymous"]
-        cols_to_keep.update(group_keys)
-        cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
-        all_possible_counts.drop(columns=cols_to_drop, inplace=True)
+    #     cols_to_keep = {"actual_count"}
+    #     if context_aware:
+    #         # Add sequence context feature columns.
+    #         all_possible_counts = self.add_extra_featues(all_possible_counts, ref_seq)
+    #         group_keys = [
+    #             "ID",
+    #             "site",
+    #             "mut_type",
+    #             "wt_nt",
+    #             "mut_nt",
+    #             "motif",
+    #             "unpaired",
+    #             "nt_site_before_boundary",
+    #             "is_synonymous",
+    #         ]
+    #     else:
+    #         group_keys = ["ID", "site", "wt_nt", "mut_nt", "is_synonymous"]
+    #     cols_to_keep.update(group_keys)
+    #     cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
+    #     all_possible_counts.drop(columns=cols_to_drop, inplace=True)
 
-        # Combine the actual observed counts with the 0 counts from all possible founder
-        # mutations.
-        all_possible_counts = all_possible_counts.groupby(
-            group_keys, as_index=False
-        ).sum()
+    #     # Combine the actual observed counts with the 0 counts from all possible founder
+    #     # mutations.
+    #     all_possible_counts = all_possible_counts.groupby(
+    #         group_keys, as_index=False
+    #     ).sum()
 
-        # Compute expected counts.
-        if context_aware:
-            subtree_mut_count = counts.actual_count.sum()
-            merge_keys = ["mut_type", "motif", "unpaired", "nt_site_before_boundary"]
-            all_possible_counts = all_possible_counts.merge(
-                self.rates_df, on=merge_keys
-            )
-            all_possible_counts.rename(columns={"rate": "expected_count"}, inplace=True)
-            all_possible_counts.expected_count *= subtree_mut_count
-        else:
-            expected_counts = (
-                all_possible_counts.query("is_synonymous")
-                .groupby(by=["wt_nt", "mut_nt"])
-                .agg(expected_count=("actual_count", "mean"))
-                .reset_index()
-            )
-            all_possible_counts = all_possible_counts.merge(
-                expected_counts, on=["wt_nt", "mut_nt"]
-            )
+    #     # Compute expected counts.
+    #     if context_aware:
+    #         subtree_mut_count = counts.actual_count.sum()
+    #         merge_keys = ["mut_type", "motif", "unpaired", "nt_site_before_boundary"]
+    #         all_possible_counts = all_possible_counts.merge(
+    #             self.rates_df, on=merge_keys
+    #         )
+    #         all_possible_counts.rename(columns={"rate": "expected_count"}, inplace=True)
+    #         all_possible_counts.expected_count *= subtree_mut_count
+    #     else:
+    #         expected_counts = (
+    #             all_possible_counts.query("is_synonymous")
+    #             .groupby(by=["wt_nt", "mut_nt"])
+    #             .agg(expected_count=("actual_count", "mean"))
+    #             .reset_index()
+    #         )
+    #         all_possible_counts = all_possible_counts.merge(
+    #             expected_counts, on=["wt_nt", "mut_nt"]
+    #         )
 
-        if report_nucleotides:
-            nuc_counts = all_possible_counts.copy()
-            nuc_counts["syn"] = "syn-"
-            non_syn_entries = nuc_counts.query("~is_synonymous").index
-            nuc_counts.loc[non_syn_entries, "syn"] = "nonsyn-"
-            nuc_counts["ID"] = (
-                "nuc-"
-                + nuc_counts.syn
-                + nuc_counts.wt_nt
-                + nuc_counts.site.astype("str")
-                + nuc_counts.mut_nt
-            )
-            all_possible_counts = pd.concat((all_possible_counts, nuc_counts))
+    #     if report_nucleotides:
+    #         nuc_counts = all_possible_counts.copy()
+    #         nuc_counts["syn"] = "syn-"
+    #         non_syn_entries = nuc_counts.query("~is_synonymous").index
+    #         nuc_counts.loc[non_syn_entries, "syn"] = "nonsyn-"
+    #         nuc_counts["ID"] = (
+    #             "nuc-"
+    #             + nuc_counts.syn
+    #             + nuc_counts.wt_nt
+    #             + nuc_counts.site.astype("str")
+    #             + nuc_counts.mut_nt
+    #         )
+    #         all_possible_counts = pd.concat((all_possible_counts, nuc_counts))
 
-        cols_to_keep = {"ID", "actual_count", "expected_count"}
-        cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
-        all_possible_counts.drop(columns=cols_to_drop, inplace=True)
+    #     cols_to_keep = {"ID", "actual_count", "expected_count"}
+    #     cols_to_drop = set(all_possible_counts.columns) - cols_to_keep
+    #     all_possible_counts.drop(columns=cols_to_drop, inplace=True)
 
-        all_possible_counts = all_possible_counts.groupby("ID").sum()
+    #     all_possible_counts = all_possible_counts.groupby("ID").sum()
 
-        return all_possible_counts
+    #     return all_possible_counts

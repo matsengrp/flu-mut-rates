@@ -1,117 +1,72 @@
-import pandas as pd
+#!/usr/bin/env python3
+# filepath: /fh/fast/matsen_e/hhaddox/2025/flu-syn-rates/scripts/make_coding_sites.py
+import argparse
 import math
+import pandas as pd
+from Bio import SeqIO
 from collections import defaultdict
-import bte
-from ExpectedCalc import apply_muts
-import requests
+import sys
+import lzma
 
-# from Bio import Entrez, SeqIO
+def main():
+    parser = argparse.ArgumentParser(description="Create coding sites file from reference sequence.")
+    parser.add_argument('--ref_fasta', required=True, help='Path to reference FASTA file')
+    parser.add_argument('--output', required=True, help='Path to output CSV file')
+    parser.add_argument('--gene_name', required=True, help='Name of the gene')
+    args = parser.parse_args()
 
-
-old_trees = snakemake.input.original_tree_paths
-new_trees = snakemake.input.rerooted_tree_paths
-coding_site_paths = snakemake.output.coding_site_paths
-fasta_paths = snakemake.output.fasta_paths
-gtf_paths = snakemake.output.gtf_paths
-roots = snakemake.input.root_ids
-
-
-def get_sequence(seq_id, email="AnOtherExample%40example.com"):
-    ### Preferred approach using their API.
-    ### An email address is necessary, but it need not be valid.
-    # Entrez.email = "A.N.Other@example.com"
-    # wrapper = Entrez.efetch(db="nucleotide", id=seq_id, rettype="fasta", retmode="text")
-    # the_seq = str(SeqIO.read(wrapper, "fasta").seq)
-    # wrapper.close()
-
-    ###But that has a certificate problem, so we do it manually.
-    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id="
-    url += f"{seq_id}&rettype=fasta&retmode=text&tool=biopython&email={email}"
-    response = requests.get(url)
-    the_seq = "".join(response.text.split("\n")[1:])
-    return the_seq
-
-
-def get_valid_codon_pos(seq_id, email="AnOtherExample%40example.com"):
-    url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id="
-    url += f"{seq_id}&rettype=ft&retmode=text&tool=biopython&email={email}"
-    response = requests.get(url)
-    start, stop = next(
-        map(int, line.split("\t")[:2])
-        for line in map(str.strip, response.text.split("\n")[1:])
-        if line.endswith("gene")
-    )
-    return start, stop
-
-
-def guess_old_root_seq_id(tree):
-    seq_id = next(
-        x[-2]
-        for c in tree.root.children
-        if len(c.mutations) == 0 and len((x := c.id.split("|"))) >= 3
-    )
-    return seq_id
-
-
-def gather_and_write(
-    old_tree, new_tree, gene, root_id, coding_site_out, fasta_out, gtf_out
-):
-    print(f"Processing segment {gene}")
-
-    o_tree = bte.MATree(old_tree)
-    old_root_seq_id = guess_old_root_seq_id(o_tree)
-    o_ref_seq = get_sequence(old_root_seq_id)
-    gene_start, gene_end = get_valid_codon_pos(old_root_seq_id)
-    with open("old_ref_seq.fasta", "w") as the_file:
-        the_file.write(o_ref_seq)
-
-    r_tree = bte.MATree(new_tree)
-    new_root_seq_id = root_id.split("|")[-2]
-    r_ref_seq = get_sequence(new_root_seq_id)
-    muts = {int(mut[1:-1]): mut[-1] for mut in set(o_tree.get_haplotype(root_id))}
-
-    ref_seq = o_ref_seq if len(muts) == 0 else apply_muts(o_ref_seq, muts)
-    # The inferred ref_seq should match the r_ref_seq once aligned and whatever else.
-
+    # Check if the file is compressed with xz
+    is_xz = args.ref_fasta.endswith('.xz')
+    
+    # Open the file with appropriate method
+    try:
+        if is_xz:
+            fasta_file = lzma.open(args.ref_fasta, 'rt')  # Open in text mode for SeqIO
+            print(f"Reading compressed .xz file: {args.ref_fasta}")
+        else:
+            fasta_file = open(args.ref_fasta, 'r')
+            
+        # Read first sequence from the FASTA file
+        for record in SeqIO.parse(fasta_file, 'fasta'):
+            ref_seq = str(record.seq)
+            ref_id = record.id
+            break  # Only use the first sequence
+        
+        fasta_file.close()
+        
+    except Exception as e:
+        sys.stderr.write(f"Error opening or reading FASTA file: {e}\n")
+        sys.exit(1)
+    
+    # Check if sequence length is a multiple of 3
+    if len(ref_seq) % 3 != 0:
+        sys.stderr.write(f"Error: Reference sequence length ({len(ref_seq)}) is not a multiple of 3.\n")
+        sys.exit(1)
+    
+    # Create a dataframe to store coding sites information
     coding_sites_dict = defaultdict(list)
+    
+    # Process each site in the reference sequence
     for site in range(1, len(ref_seq) + 1):
         coding_sites_dict["site"].append(site)
-        if gene_start <= site <= gene_end:
-            offset = site - gene_start + 1
-            rem = offset % 3
-            coding_sites_dict["codon_position"].append(3 if rem == 0 else rem)
-            coding_sites_dict["codon_site"].append(math.ceil(offset / 3))
-            coding_sites_dict["gene"].append(gene)
-        else:
-            coding_sites_dict["codon_position"].append("noncoding")
-            coding_sites_dict["codon_site"].append("noncoding")
-            coding_sites_dict["gene"].append("noncoding")
-
+        
+        # Calculate position within codon (1, 2, or 3)
+        offset = site  # Since we assume the sequence starts at position 1
+        rem = offset % 3
+        coding_sites_dict["codon_position"].append(3 if rem == 0 else rem)
+        
+        # Calculate which codon this site belongs to
+        coding_sites_dict["codon_site"].append(math.ceil(offset / 3))
+        
+        # Assign gene name from command-line argument
+        coding_sites_dict["gene"].append(args.gene_name)
+    
+    # Convert to DataFrame and save to CSV
     coding_sites_df = pd.DataFrame(coding_sites_dict)
-    coding_sites_df.to_csv(coding_site_out)
-    with open(fasta_out, "w") as the_file:
-        the_file.write(">\n")
-        the_file.write(ref_seq)
-    gtf_string = f"{new_root_seq_id}\tncbiGenes.genePred\tCDS\t{gene_start}\t{gene_end}"
-    gtf_string += f'\t.\t+\t0\tgene_id "{gene}";'
-    with open(gtf_out, "w") as the_file:
-        the_file.write(gtf_string)
+    coding_sites_df.to_csv(args.output, index=False)
+    print(f"Created coding sites file: {args.output}")
+    print(f"Processed sequence '{ref_id}': {len(ref_seq)} nucleotides ({len(ref_seq)/3} codons)")
+    print(f"Assigned gene name: {args.gene_name}")
 
-    return None
-
-
-# Call those functions.
-with open(roots) as the_file:
-    root_dict = {
-        (x := line.split(","))[0]: x[1] for line in map(str.strip, the_file.readlines())
-    }
-params_list = zip(
-    old_trees,
-    new_trees,
-    root_dict.keys(),
-    root_dict.values(),
-    coding_site_paths,
-    fasta_paths,
-    gtf_paths,
-)
-any((gather_and_write(*p) for p in params_list))
+if __name__ == "__main__":
+    main()

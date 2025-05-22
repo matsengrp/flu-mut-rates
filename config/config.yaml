@@ -1,0 +1,17 @@
+# Influenza subtypes and segments to analyze
+subtypes:
+  - "H7N9"
+
+segments:
+  - "HA"
+
+# Data directory paths
+data_dir: "../flu-usher/results"
+output_dir: "results"
+
+# Reference files
+reference_format: "{data_dir}/{subtype}/{segment}/curated_reference.fasta"
+gtf_format: "{data_dir}/{subtype}/{segment}/curated_reference.gtf"
+
+# Tree file
+tree_format: "{data_dir}/{subtype}/{segment}/opt_tree.pb.gz"
