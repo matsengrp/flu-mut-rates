@@ -46,16 +46,13 @@ class CountsHelper:
 
         # Given the reference sequence and the a table of coding sites, initialize a
         # PossibleMutations instance for computing a dataframe of possible mutations.
-        self.poss_muts = PossibleMutations(
-            fasta_path, coding_site_path, False
-        )
+        self.poss_muts = PossibleMutations(fasta_path, coding_site_path)
         self.ref_seq = self.poss_muts.ref_seq
 
         # Make a dataframe of all possible mutations to the reference sequence
         ref_df = self.poss_muts.possible_mutations_df()
         self.key_names = (*ref_df.columns, "parent_motif")
         ref_df["gene_codon_site_id"] = ref_df["gene"] + "-" + ref_df["codon_site"].astype(str)
-        ref_df["seq_context"] = ref_df.site.apply(self.ref_motif)
         self.ref_df = ref_df
 
         # Read in the tree, translate mutations, and make a list of nodes
@@ -127,7 +124,7 @@ class CountsHelper:
             n_filtered += 1
             pcps[2].append((node.id, nt_muts))
             counts_df["branch_length"] += len(nt_muts)
-            to_increment = counts_df.query("nuc.isin(@node.mutations)").index
+            to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
             counts_df.loc[to_increment, "actual_count"] += 1
 
         # If at least some branches pass the filter, then record data
@@ -195,6 +192,34 @@ class CountsHelper:
         # Aggregate the counts and branch lengths across all nodes
         all_counts_df = self.mut_counters_to_df(all_actual_counts, all_branch_lengths)
         all_pcps_df = self.pcp_list_to_df(all_pcps)
+
+        # Add metadata to the counts dataframe
+        all_counts_df['mut_type']  = all_counts_df['wt_nt'] + all_counts_df['mut_nt']
+
+        def get_mut_class(wt_aa, mut_aa):
+            if wt_aa == mut_aa:
+                return 'synonymous'
+            elif mut_aa == '*':
+                return 'nonsense'
+            else:
+                return 'nonsynonymous'
+        all_counts_df['mut_class'] = all_counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
+
+        # Compress the counts dataframe to have one row per site
+        all_counts_df['parent_motif'] = all_counts_df['parent_motif'].fillna('N.A.')
+        groupby_cols = ['site', 'nt_mut', 'wt_nt', 'mut_nt', 'parent_motif', 'actual_count', 'branch_length']
+        all_counts_df = all_counts_df.groupby(groupby_cols).agg({
+            'gene': lambda x: ';'.join(str(val) for val in x),
+            'codon_position': lambda x: ';'.join(str(val) for val in x),
+            'codon_site': lambda x: ';'.join(str(val) for val in x),
+            'wt_codon': lambda x: ';'.join(str(val) for val in x),
+            'mut_codon': lambda x: ';'.join(str(val) for val in x),
+            'wt_aa': lambda x: ';'.join(str(val) for val in x),
+            'mut_aa': lambda x: ';'.join(str(val) for val in x),
+            'aa_mut': lambda x: ';'.join(str(val) for val in x),
+            'mut_class': lambda x: ';'.join(str(val) for val in x),
+        }).reset_index()
+
         return n_filtered, all_counts_df, all_pcps_df
 
     # def parallel_count_mutations_on_tree(self, processes=8, batch_size=1000):
@@ -255,8 +280,8 @@ class CountsHelper:
         n_filtered, all_counts_df, all_pcps_df = self.count_mutations_on_tree()
         print(f"Number of nodes passing filter: {n_filtered}")
 
-        all_counts_df.to_csv(all_counts_path)
-        all_pcps_df.to_csv(all_pcps_path)
+        all_counts_df.to_csv(all_counts_path, index=False)
+        all_pcps_df.to_csv(all_pcps_path, index=False)
 
         return None
 

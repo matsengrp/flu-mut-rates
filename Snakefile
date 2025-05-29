@@ -22,6 +22,11 @@ rule make_coding_sites:
             data_dir=config["data_dir"],
             subtype=wildcards.subtype,
             segment=wildcards.segment
+        ),
+        gff_file=lambda wildcards: config["gff_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
         )
     output:
         coding_sites="{output_dir}/{subtype}/{segment}/coding_sites.csv"
@@ -31,8 +36,8 @@ rule make_coding_sites:
         """
         python scripts/make_coding_sites.py \
             --ref_fasta {input.ref_fasta} \
-            --output {output.coding_sites} \
-            --gene_name {wildcards.segment} 2> {log}
+            --gff_file {input.gff_file} \
+            --output {output.coding_sites} 2> {log}
         """
 
 # Count mutations along tree
