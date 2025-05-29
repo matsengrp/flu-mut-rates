@@ -99,103 +99,12 @@ class CountsHelper:
         parent_node_haplotype = self.tree.get_haplotype(parent.id)
         p_muts = {int(mut[1:-1]): mut[-1] for mut in parent_node_haplotype}
 
-        # If speed is an issue, we can rewrite the possible_muts_from_founder_muts
-        # method to avoid dataframes.
         # Make a dataframe of possible mutations to the parent, add a column giving the
         # seqeunce context of each mutation, and initialize columns to record counts
         # and branch lengths.
         counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)
-        parent_motif = lambda s: parent_seq[s - 2 : s + 1]
-        counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
-        counts_df["actual_count"] = 0
-        counts_df["branch_length"] = 0
-        pcps = (parent.id, parent_seq, [])
 
-        # Iterate over the children of the parent node, and count mutations to each
-        n_filtered = 0
-        for node in parent.children:
-            
-            # Get the mutations on the branch and only analyze them if they
-            # pass the filter
-            nt_muts = node.mutations
-            codon_muts = self.translations[node.id]
-            if self.fails_filters(nt_muts, codon_muts):
-                continue
-            n_filtered += 1
-            pcps[2].append((node.id, nt_muts))
-            counts_df["branch_length"] += len(nt_muts)
-            to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
-            counts_df.loc[to_increment, "actual_count"] += 1
-
-        # If at least some branches pass the filter, then record data
-        # TODO: ask Chris about logic
-        if n_filtered != 0:
-            records = counts_df.to_records(index=False).tolist()
-            counts_dict = Counter({x[:-2]: x[-2] for x in records})
-            branches_dict = Counter({x[:-2]: x[-1] for x in records})
-        else:
-            counts_dict, branches_dict = Counter(), Counter()
-
-        return n_filtered, counts_dict, branches_dict, pcps
-
-    def mut_counters_to_df(self, actual_counts, branch_lengths):
-        """
-        Return a DataFrame with data from two counters like those returned by
-        self.count_mutations_from_parent.
-        """
-        zipped = zip(actual_counts.items(), branch_lengths.values())
-        data = [(*k, v, w) for (k, v), w in zipped]
-        columns = [*self.key_names, "actual_count", "branch_length"]
-        the_df = pd.DataFrame(data, columns=columns)
-        return the_df
-
-    def site_counter_to_df(self, counter, n_filtered):
-        """
-        Return a dataframe with site conservation information from a Counter.
-        """
-        the_df = pd.DataFrame.from_dict(counter, orient="index")
-        the_df.reset_index(inplace=True)
-        the_df.rename(columns={"index": "site", 0: "mut_count"}, inplace=True)
-        the_df["frac_mut"] = the_df.mut_count / n_filtered
-        the_df["frac_cons"] = 1 - the_df.frac_mut
-        the_df.sort_values("mut_count", ascending=False, inplace=True)
-        return the_df
-
-
-    def count_mutations_on_tree(self):
-        """
-        Count the number of mutations along the tree. Return the number of nodes passing
-        the filter, a dataframe of per site nucleotide mutations, and a dataframe of
-        parent child pairs.
-        """
-        # Use counters rather than a dataframe, since summing together many.
-        n_filtered, all_actual_counts, all_branch_lengths = 0, Counter(), Counter()
-        all_pcps = []
-        t0 = -time()
-
-        # Iterate over all nodes
-        for i, node in enumerate(self.int_nodes, 1):
-            if i % 1000 == 0:
-                print(f"processing node {i}; {t0+time():0.1f} seconds")
-
-            # If the node is a parent node, count mutations going to each of its children
-            # TODO: check with Chris about the line I added and the Counter logic
-            # TODO: update n_filtered variable name
-            if node.children:
-                count, actual_counts, branch_lens, pcps = self.count_mutations_from_parent(node)
-                n_filtered += count
-                all_actual_counts.update(actual_counts)
-                all_branch_lengths.update(branch_lens)
-                if count != 0:
-                    all_pcps.append(pcps)
-
-        # Aggregate the counts and branch lengths across all nodes
-        all_counts_df = self.mut_counters_to_df(all_actual_counts, all_branch_lengths)
-        all_pcps_df = self.pcp_list_to_df(all_pcps)
-
-        # Add metadata to the counts dataframe
-        all_counts_df['mut_type']  = all_counts_df['wt_nt'] + all_counts_df['mut_nt']
-
+        # Add columns giving mutation class and mutation type
         def get_mut_class(wt_aa, mut_aa):
             if wt_aa == mut_aa:
                 return 'synonymous'
@@ -203,12 +112,15 @@ class CountsHelper:
                 return 'nonsense'
             else:
                 return 'nonsynonymous'
-        all_counts_df['mut_class'] = all_counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
+        counts_df['mut_class'] = counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
+        counts_df['mut_type']  = counts_df['wt_nt'] + counts_df['mut_nt']
 
-        # Compress the counts dataframe to have one row per site
-        all_counts_df['parent_motif'] = all_counts_df['parent_motif'].fillna('N.A.')
-        groupby_cols = ['site', 'nt_mut', 'wt_nt', 'mut_nt', 'parent_motif', 'actual_count', 'branch_length']
-        all_counts_df = all_counts_df.groupby(groupby_cols).agg({
+        # Compress the counts dataframe to have one row per site, where values for sites that
+        # had more than one row are concatenated with a semicolon.
+        groupby_cols = [
+            'site', 'nt_mut', 'mut_type', 'wt_nt', 'mut_nt'
+        ]
+        counts_df = counts_df.groupby(groupby_cols).agg({
             'gene': lambda x: ';'.join(str(val) for val in x),
             'codon_position': lambda x: ';'.join(str(val) for val in x),
             'codon_site': lambda x: ';'.join(str(val) for val in x),
@@ -220,7 +132,82 @@ class CountsHelper:
             'mut_class': lambda x: ';'.join(str(val) for val in x),
         }).reset_index()
 
-        return n_filtered, all_counts_df, all_pcps_df
+        # Add the parent motif and initialize the actual count and branch length columns
+        parent_motif = lambda s: parent_seq[s - 2 : s + 1]
+        counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
+        counts_df["actual_count"] = 0
+        counts_df["branch_length"] = 0
+        pcps = (parent.id, parent_seq, [])
+
+        # Iterate over the children of the parent node, and count mutations on
+        # the branch going to each child, if the branch passes the filters
+        n_passing_filters = 0
+        for node in parent.children:
+            nt_muts = node.mutations
+            codon_muts = self.translations[node.id]
+            if self.fails_filters(nt_muts, codon_muts):
+                continue
+            n_passing_filters += 1
+            pcps[2].append((node.id, nt_muts))
+            counts_df["branch_length"] += len(nt_muts)
+            to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
+            counts_df.loc[to_increment, "actual_count"] += 1
+
+        return n_passing_filters, counts_df, pcps
+
+    def count_mutations_on_tree(self):
+        """
+        Count the number of mutations along the tree. Return the number of nodes passing
+        the filter, a dataframe of per site nucleotide mutations, and a dataframe of
+        parent child pairs.
+        """
+        # Initialize 
+        all_counts_df = pd.DataFrame()
+        n_passing_filters = 0
+        all_pcps = []
+        t0 = -time()
+
+        # Iterate over all internal nodes. For each, record counts along branches to children,
+        # only considering branches that pass filters. Also record each PCP passing filters.
+        for i, node in enumerate(self.int_nodes, 1):
+            
+            if i % 1000 == 0:
+                print(f"processing internal node {i}; {t0+time():0.1f} seconds")
+            n_passing_filters_i, counts_df, pcps = self.count_mutations_from_parent(node)
+            n_passing_filters += n_passing_filters_i
+
+            # Skip the internal node if no branches to its children passed the filters
+            if counts_df['branch_length'].sum() == 0:
+                continue
+
+            # Add PCPs to the big list for the whole tree
+            all_pcps.append(pcps)
+
+            # Add counts and branch lengths to the big dataframe for the whole tree
+            if all_counts_df.empty:
+                all_counts_df = counts_df
+            else:
+                if n_passing_filters == 0:
+                    continue
+                cols = [
+                    'site', 'nt_mut', 'mut_type', 'wt_nt', 'mut_nt',
+                    'gene', 'codon_position', 'codon_site',
+                    'wt_codon', 'mut_codon', 'wt_aa', 'mut_aa',
+                    'aa_mut', 'parent_motif'
+                ]
+                all_counts_df = (
+                    pd.concat([all_counts_df, counts_df])
+                    .groupby(cols, as_index=False)
+                    .agg({
+                        'actual_count' : 'sum',
+                        'branch_length' : 'sum'
+                    })
+                )
+
+        # Aggregate the counts and branch lengths across all nodes
+        all_pcps_df = self.pcp_list_to_df(all_pcps)        
+
+        return n_passing_filters, all_counts_df, all_pcps_df
 
     # def parallel_count_mutations_on_tree(self, processes=8, batch_size=1000):
     #     """
@@ -277,8 +264,8 @@ class CountsHelper:
         print(f"Number of internal nodes in tree: {self.n_int_nodes}")
 
         print(f"Counting mutations on tree...")
-        n_filtered, all_counts_df, all_pcps_df = self.count_mutations_on_tree()
-        print(f"Number of nodes passing filter: {n_filtered}")
+        n_passing_filters, all_counts_df, all_pcps_df = self.count_mutations_on_tree()
+        print(f"Number of nodes passing filter: {n_passing_filters}")
 
         all_counts_df.to_csv(all_counts_path, index=False)
         all_pcps_df.to_csv(all_pcps_path, index=False)
