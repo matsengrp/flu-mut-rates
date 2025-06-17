@@ -1,151 +1,106 @@
-"""Top-level ``snakemake`` file that runs pipeline."""
-import os
-import textwrap
-import yaml
-from itertools import permutations
-configfile: "config.yaml"
+# Load configuration
+configfile: "config/config.yaml"
 
+# Final output files
+final_outputs = expand(
+    ["{output_dir}/{subtype}/{segment}/mutation_counts.csv",
+     "{output_dir}/{subtype}/{segment}/parent_child_pairs.csv"],
+    output_dir=config["output_dir"],
+    subtype=config["subtypes"],
+    segment=config["segments"]
+) + expand(
+    "{output_dir}/aligned_proteins/{segment}",
+    output_dir=config["output_dir"],
+    segment=config["segments"]
+)
 
-
-segs = config["files_to_grab"]["segments"].keys()
-mut_types = list(map("".join,permutations("AGCT",2)))
-
-
+# Main rule to define target outputs
 rule all:
-    input:       
-        expand(
-            #"results_{mat}/results/counts_by_mut_type_{seg}.png",
-            "results_{mat}/results/tree_sizes_{seg}.csv",
-            mat=config["files_to_grab"]["mat"],
-            seg=segs
-        )
-
-
-rule get_flu_segments_from_web:
-    """...get the files..."""
-    output:
-        expand(
-            "results_{mat}/data/{seg_name}.{file}",
-            mat=config["files_to_grab"]["mat"],
-            seg_name=config["files_to_grab"]["segments"].keys(),
-            file=["meta.tsv", "pb"]
-        )
-    params:
-        the_urls=expand(
-            "{base_url}{value}/{more}{value}{file}", 
-            base_url=config["files_to_grab"]["base_url"],
-            value=config["files_to_grab"]["segments"].values(),
-            more=config["files_to_grab"]["more_url"],
-            file=[
-                config["files_to_grab"]["meta"],
-                config["files_to_grab"]["pb"]
-            ]
-        )
-    run:
-        for url, dest in zip(params.the_urls, output):
-            shell(f"wget -O - {url} | gunzip -c > {dest}")
-
-
-metas = expand("{seg}.meta.tsv",seg=segs)
-rule find_roots:
-    """... Determine new root nodes. """
     input:
-        ["results_{mat}/data/" + file for file in metas]
-    output:
-        path="results_{mat}/data/root_ids.csv"
-    script:
-        "scripts/find_roots.py"
+        final_outputs
 
-
-pbs = expand("{seg}.pb",seg=segs)
-rule reroot_trees:
-    """...reroot to common old node..."""
+# Create coding sites file
+rule make_coding_sites:
     input:
-        tree_paths=["results_{mat}/data/" + file for file in pbs],
-        root_ids="results_{mat}/data/root_ids.csv"
+        ref_fasta=lambda wildcards: config["reference_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
+        ),
+        gff_file=lambda wildcards: config["gff_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
+        )
     output:
-        ["results_{mat}/data/rerooted_" + file for file in pbs]
-    conda:
-        "flu-syn-rates-usher"
+        coding_sites="{output_dir}/{subtype}/{segment}/coding_sites.csv"
+    log:
+        "{output_dir}/logs/{subtype}_{segment}_coding_sites.log"
     shell:
         """
-        # Create a bash array from the input files
-        LIST1=({input.tree_paths})    
-        LIST2=({output})
-        COUNTER=0
-
-        while IFS=',' read -r c1 c2; do    
-            inpath=${{LIST1[${{COUNTER}}]}}
-            outpath=${{LIST2[${{COUNTER}}]}}                
-            matUtils extract -i $inpath --reroot "$c2" -o $outpath
-            #matUtils reroot -i $inpath -o $outpath -k "$c2"--preserve-branch-length       
-            let COUNTER=1+$COUNTER
-        done < "{input.root_ids}"
+        python scripts/make_coding_sites.py \
+            --ref_fasta {input.ref_fasta} \
+            --gff_file {input.gff_file} \
+            --subtype {wildcards.subtype} \
+            --segment {wildcards.segment} \
+            --output_directory {wildcards.output_dir}/{wildcards.subtype}/{wildcards.segment} 2> {log}
         """
 
-
-coding_site_files = expand('coding_sites_{seg}.csv', seg=segs)
-fasta_files = expand('inferred_{seg}.fasta', seg=segs)
-gtf_files = expand('ref_{seg}.gtf', seg=segs)
-rule makes_coding_dicts:
+# Count mutations along tree
+rule count_mutations:
     input:
-        original_tree_paths=["results_{mat}/data/" + file for file in pbs],
-        rerooted_tree_paths=["results_{mat}/data/rerooted_" + file for file in pbs],
-        root_ids="results_{mat}/data/root_ids.csv"
+        tree_path=lambda wildcards: config["tree_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
+        ),
+        coding_site_path=rules.make_coding_sites.output.coding_sites,
+        fasta_path=lambda wildcards: config["reference_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
+        ),
+        gtf_path=lambda wildcards: config["gtf_format"].format(
+            data_dir=config["data_dir"],
+            subtype=wildcards.subtype,
+            segment=wildcards.segment
+        )
     output:
-        coding_site_paths=["results_{mat}/data/"+file for file in coding_site_files],
-        fasta_paths=["results_{mat}/data/"+file for file in fasta_files],
-        gtf_paths=["results_{mat}/data/"+file for file in gtf_files]
-    script:
-        "scripts/make_coding_sites.py"
+        all_counts_path="{output_dir}/{subtype}/{segment}/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{subtype}/{segment}/parent_child_pairs.csv"
+    log:
+        "{output_dir}/logs/{subtype}_{segment}_mutation_counts.log"
+    shell:
+        """
+        python scripts/make_count_dfs.py \
+            --tree_path {input.tree_path} \
+            --coding_site_path {input.coding_site_path} \
+            --fasta_path {input.fasta_path} \
+            --gtf_path {input.gtf_path} \
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} 2> {log}
+        """
 
-
-bad_site_files = expand('bad_sites_{seg}.csv', seg=segs)
-secondary_structs_files = expand('secondary_struct_{seg}.csv', seg=segs)
-rates_tables_files = expand('rates_{seg}.csv', seg=segs)
-rule make_placeholder_files:
-    output: 
-        bad_sites_paths=["results_{mat}/data/"+file for file in bad_site_files],
-        secondary_structs=["results_{mat}/data/"+file for file in secondary_structs_files], 
-        rates_tables=["results_{mat}/data/"+file for file in rates_tables_files],
-    script:
-        "scripts/make_placeholder_files.py"
-
-
-all_counts_files = expand("all_counts_{seg}.csv", seg=segs)
-all_pcps_files = expand("all_pcps_{seg}.csv", seg=segs)
-nuc_conservation_files = expand("nt_conservation_{seg}.csv", seg=segs)
-codon_conservation_files = expand("codon_conservation_{seg}.csv", seg=segs)
-tree_size_files = expand("tree_sizes_{seg}.csv", seg=segs)
-rule make_count_dfs:
+# Align protein sequences across subtypes
+rule align_proteins:
     input:
-        rerooted_tree_paths=["results_{mat}/data/rerooted_" + file for file in pbs],
-        coding_site_paths=["results_{mat}/data/"+file for file in coding_site_files],
-        fasta_paths=["results_{mat}/data/"+file for file in fasta_files],
-        gtf_paths=["results_{mat}/data/"+file for file in gtf_files],
-        bad_sites_paths=["results_{mat}/data/"+file for file in bad_site_files],
-        secondary_structs=["results_{mat}/data/"+file for file in secondary_structs_files], 
-        rates_tables=["results_{mat}/data/"+file for file in rates_tables_files],
+        # Ensure all coding sites files are created first
+        coding_sites=expand("{output_dir}/{subtype}/{segment}/coding_sites.csv",
+                          output_dir=config["output_dir"],
+                          subtype=config["subtypes"],
+                          segment="{segment}")
     output:
-        all_counts_paths=["results_{mat}/results/"+file for file in all_counts_files],
-        all_pcps_paths=["results_{mat}/results/"+file for file in all_pcps_files],
-        nuc_conservation_paths=["results_{mat}/results/"+file for file in nuc_conservation_files],
-        codon_conservation_paths=["results_{mat}/results/"+file for file in codon_conservation_files],
-        tree_size_paths=["results_{mat}/results/"+file for file in tree_size_files]
-    script:
-        "scripts/make_count_dfs.py"
-
-
-boxplot_files = expand("counts_by_mut_type_{seg}.png", seg=segs)
-mut_type_dirs = expand("scatter_plots_{seg}/", seg=segs)
-mut_type_files = expand("scatter_plots_{seg}/{mt}.png", seg=segs, mt=mut_types)
-rule make_basic_plots:
-    input:
-        all_counts_paths=["results_{mat}/results/"+file for file in all_counts_files]
-    output:
-        boxplot_paths = ["results_{mat}/results/"+file for file in boxplot_files],
-        mut_type_paths = ["results_{mat}/results/"+file for file in mut_type_files]
+        # Output directory marker (you could also specify specific aligned files)
+        aligned_dir=directory("{output_dir}/aligned_proteins/{segment}")
+    log:
+        "{output_dir}/logs/align_proteins_{segment}.log"
     params:
-        mut_type_dirs = ["results_{mat}/results/"+file for file in mut_type_dirs]
-    script:
-        "scripts/basic_plots.py"
+        subtypes=config["subtypes"]
+    shell:
+        """
+        python scripts/align_proteins.py \
+            --output_dir {config[output_dir]} \
+            --segment {wildcards.segment} \
+            --subtypes {params.subtypes} \
+            --muscle_path muscle 2> {log}
+        """
