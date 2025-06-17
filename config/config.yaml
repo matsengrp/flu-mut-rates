@@ -1,16 +1,29 @@
 # Influenza subtypes and segments to analyze
 subtypes:
+  - "H1N1"
+  - "H3N2"
+  - "H5N1"
   - "H7N9"
+  - "H9N2"
 
 segments:
+  - "PB2"
+  - "PB1"
+  - "PA"
   - "HA"
+  - "NP"
+  - "NA"
+  - "MP"
+  - "NS"
 
 # Data directory paths
 data_dir: "../flu-usher/results"
 output_dir: "results"
 
 # Reference files
+# TODO simplfy to just use GTF
 reference_format: "{data_dir}/{subtype}/{segment}/curated_reference.fasta"
+gff_format: "{data_dir}/{subtype}/{segment}/curated_reference.gff"
 gtf_format: "{data_dir}/{subtype}/{segment}/curated_reference.gtf"
 
 # Tree file

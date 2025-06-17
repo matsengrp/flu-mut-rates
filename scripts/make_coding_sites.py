@@ -2,16 +2,20 @@ import argparse
 import math
 import pandas as pd
 from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from collections import defaultdict
 import sys
-import lzma
 import gffutils
+import os
 
 def main():
     parser = argparse.ArgumentParser(description="Create coding sites file from reference sequence.")
     parser.add_argument('--ref_fasta', required=True, help='Path to reference FASTA file')
-    parser.add_argument('--output', required=True, help='Path to output CSV file')
+    parser.add_argument('--output_directory', required=True, help='Directory for output files')
     parser.add_argument('--gff_file', required=True, help='Path to GFF annotation file')
+    parser.add_argument('--subtype', required=True, help='Influenza subtype (e.g., H1N1, H3N2)')
+    parser.add_argument('--segment', required=True, help='Gene segment (e.g., HA, NA)')
     args = parser.parse_args()
 
     # Read in the reference sequence from the FASTA file, assuming it is the first sequence
@@ -57,6 +61,58 @@ def main():
             }
     
     print(f"Found {len(genes_info)} genes: {list(genes_info.keys())}")
+    
+    # Create output directory and protein sequences subdirectory if they don't exist
+    if not os.path.exists(args.output_directory):
+        os.makedirs(args.output_directory)
+    
+    protein_seq_dir = os.path.join(args.output_directory, "protein_sequences")
+    if not os.path.exists(protein_seq_dir):
+        os.makedirs(protein_seq_dir)
+    
+    # Translate each gene and save as FASTA
+    for gene_name, gene_info in genes_info.items():
+        cdss = gene_info['cdss']
+        strand = gene_info['strand']
+        
+        # Extract and concatenate all CDS sequences for this gene
+        gene_nucleotide_seq = ""
+        for cds_start, cds_end, cds_strand in cdss:
+            # Extract sequence (convert to 0-based indexing)
+            cds_seq = ref_seq[cds_start-1:cds_end]
+            gene_nucleotide_seq += cds_seq
+        
+        # Convert to Biopython Seq object
+        bio_seq = Seq(gene_nucleotide_seq)
+        
+        # Reverse complement if on negative strand
+        if strand == '-':
+            bio_seq = bio_seq.reverse_complement()
+        
+        # Check if length is divisible by 3
+        if len(bio_seq) % 3 != 0:
+            print(f"Warning: Gene {gene_name} nucleotide sequence length ({len(bio_seq)}) is not divisible by 3")
+            # Trim to nearest multiple of 3
+            bio_seq = bio_seq[:len(bio_seq) - (len(bio_seq) % 3)]
+        
+        # Translate to amino acids
+        try:
+            amino_acid_seq = bio_seq.translate()
+            
+            # Create SeqRecord with custom ID format and blank description
+            record = SeqRecord(
+                amino_acid_seq,
+                id=f"{args.subtype} {args.segment} {gene_name.upper()}",
+                description=""
+            )
+            
+            # Save to FASTA file in protein_sequences subdirectory
+            output_fasta = os.path.join(protein_seq_dir, f"{gene_name.upper()}.fasta")
+            SeqIO.write(record, output_fasta, "fasta")
+            print(f"Saved translated sequence for {gene_name.upper()} to {output_fasta} ({len(amino_acid_seq)} amino acids)")
+            
+        except Exception as e:
+            print(f"Error translating gene {gene_name}: {e}")
     
     # Create a dataframe to store coding sites information
     coding_sites_data = []
@@ -131,10 +187,11 @@ def main():
         'gene': lambda x: ';'.join(str(val) for val in x)
     }).reset_index()
     
-    # Save to CSV
-    final_df.to_csv(args.output, index=False)
+    # Save coding sites CSV in output directory
+    coding_sites_output = os.path.join(args.output_directory, "coding_sites.csv")
+    final_df.to_csv(coding_sites_output, index=False)
     
-    print(f"Created coding sites file: {args.output}")
+    print(f"Created coding sites file: {coding_sites_output}")
     print(f"Processed sequence '{ref_id}': {len(ref_seq)} nucleotides")
     
     # Print summary statistics (using original uncompressed data for accurate counts)

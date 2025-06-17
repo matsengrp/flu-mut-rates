@@ -8,6 +8,10 @@ final_outputs = expand(
     output_dir=config["output_dir"],
     subtype=config["subtypes"],
     segment=config["segments"]
+) + expand(
+    "{output_dir}/aligned_proteins/{segment}",
+    output_dir=config["output_dir"],
+    segment=config["segments"]
 )
 
 # Main rule to define target outputs
@@ -37,7 +41,9 @@ rule make_coding_sites:
         python scripts/make_coding_sites.py \
             --ref_fasta {input.ref_fasta} \
             --gff_file {input.gff_file} \
-            --output {output.coding_sites} 2> {log}
+            --subtype {wildcards.subtype} \
+            --segment {wildcards.segment} \
+            --output_directory {wildcards.output_dir}/{wildcards.subtype}/{wildcards.segment} 2> {log}
         """
 
 # Count mutations along tree
@@ -73,4 +79,28 @@ rule count_mutations:
             --gtf_path {input.gtf_path} \
             --all_counts_path {output.all_counts_path} \
             --all_pcps_path {output.all_pcps_path} 2> {log}
+        """
+
+# Align protein sequences across subtypes
+rule align_proteins:
+    input:
+        # Ensure all coding sites files are created first
+        coding_sites=expand("{output_dir}/{subtype}/{segment}/coding_sites.csv",
+                          output_dir=config["output_dir"],
+                          subtype=config["subtypes"],
+                          segment="{segment}")
+    output:
+        # Output directory marker (you could also specify specific aligned files)
+        aligned_dir=directory("{output_dir}/aligned_proteins/{segment}")
+    log:
+        "{output_dir}/logs/align_proteins_{segment}.log"
+    params:
+        subtypes=config["subtypes"]
+    shell:
+        """
+        python scripts/align_proteins.py \
+            --output_dir {config[output_dir]} \
+            --segment {wildcards.segment} \
+            --subtypes {params.subtypes} \
+            --muscle_path muscle 2> {log}
         """

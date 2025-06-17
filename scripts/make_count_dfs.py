@@ -102,23 +102,12 @@ class CountsHelper:
         # Make a dataframe of possible mutations to the parent, add a column giving the
         # seqeunce context of each mutation, and initialize columns to record counts
         # and branch lengths.
-        counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)
-
-        # Add columns giving mutation class and mutation type
-        def get_mut_class(wt_aa, mut_aa):
-            if wt_aa == mut_aa:
-                return 'synonymous'
-            elif mut_aa == '*':
-                return 'nonsense'
-            else:
-                return 'nonsynonymous'
-        counts_df['mut_class'] = counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
-        counts_df['mut_type']  = counts_df['wt_nt'] + counts_df['mut_nt']
+        counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)        
 
         # Compress the counts dataframe to have one row per site, where values for sites that
         # had more than one row are concatenated with a semicolon.
         groupby_cols = [
-            'site', 'nt_mut', 'mut_type', 'wt_nt', 'mut_nt'
+            'site', 'nt_mut', 'wt_nt', 'mut_nt'
         ]
         counts_df = counts_df.groupby(groupby_cols).agg({
             'gene': lambda x: ';'.join(str(val) for val in x),
@@ -129,7 +118,6 @@ class CountsHelper:
             'wt_aa': lambda x: ';'.join(str(val) for val in x),
             'mut_aa': lambda x: ';'.join(str(val) for val in x),
             'aa_mut': lambda x: ';'.join(str(val) for val in x),
-            'mut_class': lambda x: ';'.join(str(val) for val in x),
         }).reset_index()
 
         # Add the parent motif and initialize the actual count and branch length columns
@@ -161,7 +149,7 @@ class CountsHelper:
         the filter, a dataframe of per site nucleotide mutations, and a dataframe of
         parent child pairs.
         """
-        # Initialize 
+        # Initialize variables
         all_counts_df = pd.DataFrame()
         n_passing_filters = 0
         all_pcps = []
@@ -190,7 +178,7 @@ class CountsHelper:
                 if n_passing_filters == 0:
                     continue
                 cols = [
-                    'site', 'nt_mut', 'mut_type', 'wt_nt', 'mut_nt',
+                    'site', 'nt_mut', 'wt_nt', 'mut_nt',
                     'gene', 'codon_position', 'codon_site',
                     'wt_codon', 'mut_codon', 'wt_aa', 'mut_aa',
                     'aa_mut', 'parent_motif'
@@ -203,6 +191,32 @@ class CountsHelper:
                         'branch_length' : 'sum'
                     })
                 )
+
+        # Add metadata to the counts dataframe
+        def get_mut_class(wt_aa_list, mut_aa_list):
+            
+            # Split the amino acid lists and determine mutation class
+            wt_aa_list = wt_aa_list.split(';')
+            mut_aa_list = mut_aa_list.split(';')
+            mut_class_list = []
+            for wt_aa, mut_aa in zip(wt_aa_list, mut_aa_list):
+                if wt_aa == mut_aa:
+                    mut_class_list.append('synonymous')
+                elif mut_aa == '*':
+                    mut_class_list.append('nonsense')
+                else:
+                    mut_class_list.append('nonsynonymous')
+            
+            # Determine the overall mutation class
+            if 'nonsense' in mut_class_list:
+                return 'nonsense'
+            elif 'nonsynonymous' in mut_class_list:
+                return 'nonsynonymous'
+            else:
+                return 'synonymous'
+
+        all_counts_df['mut_class'] = all_counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
+        all_counts_df['mut_type']  = all_counts_df['wt_nt'] + all_counts_df['mut_nt']
 
         # Aggregate the counts and branch lengths across all nodes
         all_pcps_df = self.pcp_list_to_df(all_pcps)        
