@@ -19,7 +19,7 @@ def main():
     
     # Check each subtype's protein_sequences directory
     for subtype in args.subtypes:
-        protein_dir = os.path.join(args.output_dir, subtype, args.segment, "protein_sequences")
+        protein_dir = os.path.join(args.output_dir, args.segment, subtype, "protein_sequences")
         
         if not os.path.exists(protein_dir):
             sys.stderr.write(f"Error: Directory {protein_dir} does not exist\n")
@@ -65,7 +65,7 @@ def main():
         sequences = []
         
         for subtype in args.subtypes:
-            protein_file = os.path.join(args.output_dir, subtype, args.segment, "protein_sequences", f"{gene}.fasta")
+            protein_file = os.path.join(args.output_dir, args.segment, subtype, "protein_sequences", f"{gene}.fasta")
             
             if os.path.exists(protein_file):
                 try:

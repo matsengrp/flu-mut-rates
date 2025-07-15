@@ -1,10 +1,5 @@
 # flu-syn-rates
 
-## TODO
-* Analyze fitness effects
-   * compare to DMS data
-   * visualize fitness effects
-
 ## Overview
 
 This pipeline calculates synonymous and non-synonymous mutation rates across influenza virus sequences by analyzing phylogenetic trees and sequence data. It processes multiple influenza subtypes (e.g., H1N1, H3N2) and genome segments (e.g., HA, NA) as specified in the configuration.
