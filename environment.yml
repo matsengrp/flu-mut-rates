@@ -17,4 +17,6 @@ dependencies:
   - scipy
   - statsmodels
   - bte
-
+  - biopython
+  - muscle
+  - gffutils
