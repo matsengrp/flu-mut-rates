@@ -72,7 +72,7 @@ class GeneralLinearModel:
             log_rates = np.log(df_mut_type["rate"].values).reshape(-1, 1)
 
             # Create data matrix X, dimensions: (# of sites, # of parameters in model)
-            X = self.create_data_matrix(df_mut_type.copy(), mut_type)
+            X = self.create_data_matrix(df_mut_type.copy())
 
             # Fit a linear model as log_rates = w @ X using a mean squared loss with a
             # l2-regularization.
@@ -153,7 +153,7 @@ class GeneralLinearModel:
             log_rates = np.log(df_mut_type["rate"].values).reshape(-1, 1)
 
             # Create data matrix X, dimensions: (# of sites, # of parameters in model)
-            X = self.create_data_matrix(df_mut_type.copy(), mut_type)
+            X = self.create_data_matrix(df_mut_type.copy())
 
             # Compute the mean squared error of the fitted model on the training data
             mean_sq_errs[mut_type] = mean_squared_error(
@@ -188,7 +188,7 @@ class GeneralLinearModel:
             df_mut_type = df.query("mut_type==@mut_type")
 
             # Create data matrix X, dimensions: (# of sites, # of parameters in model)
-            X = self.create_data_matrix(df_mut_type.copy(), mut_type)
+            X = self.create_data_matrix(df_mut_type.copy())
 
             # Compute the mean squared error of the fitted model on the training data
             predicted_rates[mask_mut_type] = (X @ self.W[mut_type]).flatten()
