@@ -10,18 +10,19 @@ def get_subtypes_for_segment(segment):
     else:
         return ["all"]
 
-# Generate all segment-subtype combinations
-segment_subtype_combinations = []
+# Generate all segment-subtype-host combinations
+segment_subtype_host_combinations = []
 for segment in config["segments"]:
     for subtype in get_subtypes_for_segment(segment):
-        segment_subtype_combinations.append((segment, subtype))
+        for host in config["host_groups"]:
+            segment_subtype_host_combinations.append((segment, subtype, host))
 
 # Final output files
 final_outputs = []
-for segment, subtype in segment_subtype_combinations:
+for segment, subtype, host in segment_subtype_host_combinations:
     final_outputs.extend([
-        f"{config['output_dir']}/{segment}/{subtype}/mutation_counts.csv",
-        f"{config['output_dir']}/{segment}/{subtype}/parent_child_pairs.csv"
+        f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
     ])
 
 # Add aligned proteins outputs (only for HA and NA segments)
@@ -39,7 +40,7 @@ rule all:
 # Create coding sites file
 rule make_coding_sites:
     input:
-        ref_fasta=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.fasta",
+        ref_fasta=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gff_file=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gff"
     output:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
@@ -58,15 +59,15 @@ rule make_coding_sites:
 # Count mutations along tree
 rule count_mutations:
     input:
-        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/opt_tree.pb.gz",
+        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/host_specific_trees/{wildcards.host}_tree.pb.gz",
         coding_site_path=rules.make_coding_sites.output.coding_sites,
-        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.fasta",
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
-        all_counts_path="{output_dir}/{segment}/{subtype}/mutation_counts.csv",
-        all_pcps_path="{output_dir}/{segment}/{subtype}/parent_child_pairs.csv"
+        all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
     log:
-        "{output_dir}/logs/{segment}_{subtype}_mutation_counts.log"
+        "{output_dir}/logs/{segment}_{subtype}_{host}_mutation_counts.log"
     shell:
         """
         python scripts/make_count_dfs.py \
