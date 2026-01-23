@@ -21,6 +21,10 @@ segments:
   - "MP"
   - "NS"
 
+host_groups:
+  - "human"
+  - "avian"
+
 # Data directory paths
 data_dir: "../flu-usher/results"
 output_dir: "results"
