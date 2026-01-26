@@ -1,5 +1,5 @@
 # Load configuration
-configfile: "config/config.yaml"
+configfile: "config.yaml"
 
 # Helper function to get subtypes for each segment
 def get_subtypes_for_segment(segment):

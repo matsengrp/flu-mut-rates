@@ -10,11 +10,11 @@ This pipeline calculates synonymous and non-synonymous mutation rates across inf
 
 flu-syn-rates/
 ├── Snakefile             # Main workflow definition
-├── config/
-│   └── config.yaml       # Configuration file
+├── config.yaml           # Configuration file
 ├── scripts/
 │   ├── make_coding_sites.py   # Script to generate coding sites file
 │   └── make_count_dfs.py      # Script to count mutations along tree
+├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── HA/
 │   │   ├── H1/
@@ -32,7 +32,7 @@ flu-syn-rates/
 
 ### Configuration
 
-Edit `config/config.yaml` to specify:
+Edit `config.yaml` to specify:
 - HA and NA subtypes to analyze
 - Genome segments to analyze
 - Host groups to analyze
