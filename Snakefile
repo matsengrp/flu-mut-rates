@@ -45,7 +45,7 @@ rule make_coding_sites:
     output:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
     log:
-        "{output_dir}/logs/{segment}_{subtype}_coding_sites.log"
+        "logs/{segment}_{subtype}_coding_sites.log"
     shell:
         """
         python scripts/make_coding_sites.py \
@@ -53,7 +53,7 @@ rule make_coding_sites:
             --gff_file {input.gff_file} \
             --subtype {wildcards.subtype} \
             --segment {wildcards.segment} \
-            --output_directory {wildcards.output_dir}/{wildcards.segment}/{wildcards.subtype} 2> {log}
+            --output_directory {wildcards.output_dir}/{wildcards.segment}/{wildcards.subtype} &> {log}
         """
 
 # Count mutations along tree
@@ -67,7 +67,7 @@ rule count_mutations:
         all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv",
         all_pcps_path="{output_dir}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
     log:
-        "{output_dir}/logs/{segment}_{subtype}_{host}_mutation_counts.log"
+        "logs/{segment}_{subtype}_{host}_mutation_counts.log"
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -76,7 +76,7 @@ rule count_mutations:
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
             --all_counts_path {output.all_counts_path} \
-            --all_pcps_path {output.all_pcps_path} 2> {log}
+            --all_pcps_path {output.all_pcps_path} &> {log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
@@ -91,7 +91,7 @@ rule align_proteins:
         # Output directory marker (you could also specify specific aligned files)
         aligned_dir=directory("{output_dir}/aligned_proteins/{segment}")
     log:
-        "{output_dir}/logs/align_proteins_{segment}.log"
+        "logs/align_proteins_{segment}.log"
     wildcard_constraints:
         segment="HA|NA"
     params:
@@ -102,5 +102,5 @@ rule align_proteins:
             --output_dir {config[output_dir]} \
             --segment {wildcards.segment} \
             --subtypes {params.subtypes} \
-            --muscle_path muscle 2> {log}
+            --muscle_path muscle &> {log}
         """
