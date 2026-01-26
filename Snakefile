@@ -45,7 +45,7 @@ rule make_coding_sites:
     output:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
     log:
-        "logs/{segment}_{subtype}_coding_sites.log"
+        "logs/{output_dir}/{segment}_{subtype}_coding_sites.log"
     shell:
         """
         python scripts/make_coding_sites.py \
@@ -67,7 +67,7 @@ rule count_mutations:
         all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv",
         all_pcps_path="{output_dir}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
     log:
-        "logs/{segment}_{subtype}_{host}_mutation_counts.log"
+        "logs/{output_dir}/{segment}_{subtype}_{host}_mutation_counts.log"
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -91,7 +91,7 @@ rule align_proteins:
         # Output directory marker (you could also specify specific aligned files)
         aligned_dir=directory("{output_dir}/aligned_proteins/{segment}")
     log:
-        "logs/align_proteins_{segment}.log"
+        "logs/{output_dir}/align_proteins_{segment}.log"
     wildcard_constraints:
         segment="HA|NA"
     params:
