@@ -24,6 +24,7 @@ segments:
 host_groups:
   - "human"
   - "avian"
+  - "swine"
 
 # Data directory paths
 data_dir: "../flu-usher/results"
