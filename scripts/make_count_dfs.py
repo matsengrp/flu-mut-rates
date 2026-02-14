@@ -223,34 +223,6 @@ class CountsHelper:
 
         return n_passing_filters, all_counts_df, all_pcps_df
 
-    # def parallel_count_mutations_on_tree(self, processes=8, batch_size=1000):
-    #     """
-    #     ...would be nice, but not there yet...
-    #     """
-    #     raise NotImplementedError(
-    #         "Can't multiprocess with bte tree, need to do extra book keeping."
-    #     )
-    #     n_filtered, all_actual_counts, all_branch_lengths = 0, Counter(), Counter()
-    #     batch_count = ceil(self.n_int_nodes / batch_size)
-    #     t0 = -time()
-    #     with Pool(processes=processes) as pool:
-    #         for b in range(batch_count):
-    #             if b == batch_count - 1:
-    #                 nodes = self.int_nodes[b * batch_size : (b + 1) * batch_size]
-    #             else:
-    #                 nodes = self.int_nodes[b * batch_size :]
-    #             batch_result = pool.map(self.count_mutations_from_parent, nodes)
-    #             for count, actual_counts, branch_lens in batch_result:
-    #                 n_filtered += count
-    #                 all_actual_counts.update(actual_counts)
-    #                 all_branch_lengths.update(branch_lens)
-
-    #         print(
-    #             f"{b} batches of {batch_size} nodes processed in {t0+time():0.1f} seconds"
-    #         )
-    #     all_counts_df = self.mut_counters_to_df(all_actual_counts, all_branch_lengths)
-    #     return n_filtered, all_counts_df
-
     def pcp_list_to_df(self, pcps):
         """
         Turn a list of pcps, like those returned by self.count_mutations_from_parent,
