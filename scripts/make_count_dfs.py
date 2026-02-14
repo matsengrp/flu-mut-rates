@@ -67,32 +67,48 @@ class CountsHelper:
         """Return the 3-mer motif centered at the site. Site indices begin at one."""
         return self.ref_seq[s - 2 : s + 1]
 
-    def fails_filters(self, nt_muts, codon_muts):
+    def fails_filters(self, nt_muts, codon_muts, max_mutations=4):
         """
-        Returns true if the mutations at a node fail the filter. The filter requires
-        that there are between one and four mutations and no two mutations target the same codon.
+        Returns a tuple (fails, reason) indicating whether mutations at a node fail the filter.
+        The filter requires that there are between one and max_mutations mutations and no two
+        mutations target the same codon.
 
         Parameters:
             nt_mut (list): List of nucleotide mutations, string entries like "A1234G".
-            codon_muts (list): List of codon mutations, entries are bte.AAChange
-                objects.
-        """
-        fail = len(nt_muts) > 4
-        fail |= len(nt_muts) == 0
-        # fail |= sum(self.ref_seq[int(mut[1:-1]) - 1] == mut[-1] for mut in nt_muts) > 1
-        fail |= len({(mut.gene, mut.aa_index) for mut in codon_muts}) < len(codon_muts)
-        return fail
+            codon_muts (list): List of codon mutations, entries are bte.AAChange objects.
+            max_mutations (int): Maximum number of mutations allowed (default: 4).
 
-    def count_mutations_from_parent(self, parent):
+        Returns:
+            tuple: (bool, str | None) - (True, reason) if fails, (False, None) if passes.
+                   Reasons: "too_many_mutations", "zero_mutations", "duplicate_codons"
+        """
+        num_muts = len(nt_muts)
+
+        if num_muts > max_mutations:
+            return True, "too_many_mutations"
+        if num_muts == 0:
+            return True, "zero_mutations"
+
+        unique_codons = len({(mut.gene, mut.aa_index) for mut in codon_muts})
+        if unique_codons < len(codon_muts):
+            return True, "duplicate_codons"
+
+        return False, None
+
+    def count_mutations_from_parent(self, parent, max_mutations=4):
         """
         Count mutations from the parent node to all of its child nodes. Return four
         values, which are the number of child nodes that pass the filter;
         a Counter mapping a tuple of values for self.key_names to the number of times
         the associating mutation type occured; a Counter mapping a tuple of values for
         self.key_names to the sum of branch lengths where the mutation type is possible;
-        and a list of parent child pairs, where each entry is a triple with of the
+        a list of parent child pairs, where each entry is a triple with of the
         parent node id, the parent node sequence, and a list of pairs of child node id
-        and child node sequence.
+        and child node sequence; and a dictionary of filter statistics.
+
+        Parameters:
+            parent: Parent node to process.
+            max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
 
         # Get the set of mutations in the partent node relative to the reference
@@ -102,7 +118,7 @@ class CountsHelper:
         # Make a dataframe of possible mutations to the parent, add a column giving the
         # seqeunce context of each mutation, and initialize columns to record counts
         # and branch lengths.
-        counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)        
+        counts_df, parent_seq = self.poss_muts.possible_muts_from_founder_muts(p_muts)
 
         # Compress the counts dataframe to have one row per site, where values for sites that
         # had more than one row are concatenated with a semicolon.
@@ -127,27 +143,61 @@ class CountsHelper:
         counts_df["branch_length"] = 0
         pcps = (parent.id, parent_seq, [])
 
+        # Initialize filter statistics
+        filter_stats = {
+            'total_branches': 0,
+            'passing_branches': 0,
+            'total_mutations': 0,
+            'passing_mutations': 0,
+            'filtered_by_too_many': 0,
+            'filtered_by_zero': 0,
+            'filtered_by_duplicates': 0
+        }
+
         # Iterate over the children of the parent node, and count mutations on
         # the branch going to each child, if the branch passes the filters
         n_passing_filters = 0
         for node in parent.children:
             nt_muts = node.mutations
             codon_muts = self.translations[node.id]
-            if self.fails_filters(nt_muts, codon_muts):
+            num_muts = len(nt_muts)
+
+            # Update total statistics
+            filter_stats['total_branches'] += 1
+            filter_stats['total_mutations'] += num_muts
+
+            # Check if branch passes filters
+            fails, reason = self.fails_filters(nt_muts, codon_muts, max_mutations)
+            if fails:
+                # Update filtered statistics by reason
+                if reason == "too_many_mutations":
+                    filter_stats['filtered_by_too_many'] += num_muts
+                elif reason == "zero_mutations":
+                    filter_stats['filtered_by_zero'] += num_muts
+                elif reason == "duplicate_codons":
+                    filter_stats['filtered_by_duplicates'] += num_muts
                 continue
+
+            # Branch passes filters
             n_passing_filters += 1
+            filter_stats['passing_branches'] += 1
+            filter_stats['passing_mutations'] += num_muts
+
             pcps[2].append((node.id, nt_muts))
             counts_df["branch_length"] += len(nt_muts)
             to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
             counts_df.loc[to_increment, "actual_count"] += 1
 
-        return n_passing_filters, counts_df, pcps
+        return n_passing_filters, counts_df, pcps, filter_stats
 
-    def count_mutations_on_tree(self):
+    def count_mutations_on_tree(self, max_mutations=4):
         """
         Count the number of mutations along the tree. Return the number of nodes passing
-        the filter, a dataframe of per site nucleotide mutations, and a dataframe of
-        parent child pairs.
+        the filter, a dataframe of per site nucleotide mutations, a dataframe of
+        parent child pairs, and aggregate filter statistics.
+
+        Parameters:
+            max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
         # Initialize variables
         all_counts_df = pd.DataFrame()
@@ -155,14 +205,29 @@ class CountsHelper:
         all_pcps = []
         t0 = -time()
 
+        # Initialize aggregate filter statistics
+        aggregate_stats = {
+            'total_branches': 0,
+            'passing_branches': 0,
+            'total_mutations': 0,
+            'passing_mutations': 0,
+            'filtered_by_too_many': 0,
+            'filtered_by_zero': 0,
+            'filtered_by_duplicates': 0
+        }
+
         # Iterate over all internal nodes. For each, record counts along branches to children,
         # only considering branches that pass filters. Also record each PCP passing filters.
         for i, node in enumerate(self.int_nodes, 1):
-            
+
             if i % 1000 == 0:
                 print(f"processing internal node {i}; {t0+time():0.1f} seconds")
-            n_passing_filters_i, counts_df, pcps = self.count_mutations_from_parent(node)
+            n_passing_filters_i, counts_df, pcps, filter_stats = self.count_mutations_from_parent(node, max_mutations)
             n_passing_filters += n_passing_filters_i
+
+            # Accumulate filter statistics
+            for key in aggregate_stats:
+                aggregate_stats[key] += filter_stats[key]
 
             # Skip the internal node if no branches to its children passed the filters
             if counts_df['branch_length'].sum() == 0:
@@ -219,9 +284,9 @@ class CountsHelper:
         all_counts_df['mut_type']  = all_counts_df['wt_nt'] + all_counts_df['mut_nt']
 
         # Aggregate the counts and branch lengths across all nodes
-        all_pcps_df = self.pcp_list_to_df(all_pcps)        
+        all_pcps_df = self.pcp_list_to_df(all_pcps)
 
-        return n_passing_filters, all_counts_df, all_pcps_df
+        return n_passing_filters, all_counts_df, all_pcps_df, aggregate_stats
 
     def pcp_list_to_df(self, pcps):
         """
@@ -243,15 +308,65 @@ class CountsHelper:
         self,
         all_counts_path,
         all_pcps_path,
+        max_mutations=4,
     ):
-        """Calculate various counts and write to file."""
+        """
+        Calculate various counts and write to file.
+
+        Parameters:
+            all_counts_path (str): Output path for mutation counts CSV.
+            all_pcps_path (str): Output path for parent-child pairs CSV (optional).
+            max_mutations (int): Maximum number of mutations allowed (default: 4).
+        """
 
         print(f"Number of nodes in tree: {self.n_nodes}")
         print(f"Number of internal nodes in tree: {self.n_int_nodes}")
 
         print(f"Counting mutations on tree...")
-        n_passing_filters, all_counts_df, all_pcps_df = self.count_mutations_on_tree()
+        n_passing_filters, all_counts_df, all_pcps_df, filter_stats = self.count_mutations_on_tree(max_mutations)
         print(f"Number of nodes passing filter: {n_passing_filters}")
+
+        # Print detailed filtering statistics
+        print("\n" + "=" * 60)
+        print("MUTATION FILTERING STATISTICS")
+        print("=" * 60)
+        print(f"Filter threshold: max_mutations = {max_mutations}")
+        print()
+
+        total_branches = filter_stats['total_branches']
+        passing_branches = filter_stats['passing_branches']
+        filtered_branches = total_branches - passing_branches
+
+        total_mutations = filter_stats['total_mutations']
+        passing_mutations = filter_stats['passing_mutations']
+        filtered_mutations = total_mutations - passing_mutations
+
+        print(f"Total branches examined:              {total_branches:,}")
+        print(f"Branches passing filters:             {passing_branches:,} ({100*passing_branches/total_branches:.1f}%)" if total_branches > 0 else "Branches passing filters:             0 (0.0%)")
+        print(f"Branches filtered:                    {filtered_branches:,} ({100*filtered_branches/total_branches:.1f}%)" if total_branches > 0 else "Branches filtered:                    0 (0.0%)")
+        print()
+
+        print(f"Total mutations (all branches):       {total_mutations:,}")
+        print(f"Mutations on passing branches:        {passing_mutations:,} ({100*passing_mutations/total_mutations:.1f}%)" if total_mutations > 0 else "Mutations on passing branches:        0 (0.0%)")
+        print(f"Mutations on filtered branches:       {filtered_mutations:,} ({100*filtered_mutations/total_mutations:.1f}%)" if total_mutations > 0 else "Mutations on filtered branches:       0 (0.0%)")
+        print()
+
+        print("Mutations filtered by reason:")
+        print(f"  - Too many mutations (>{max_mutations}):        {filter_stats['filtered_by_too_many']:,} ({100*filter_stats['filtered_by_too_many']/total_mutations:.1f}%)" if total_mutations > 0 else f"  - Too many mutations (>{max_mutations}):        0 (0.0%)")
+        print(f"  - Zero mutations:                   {filter_stats['filtered_by_zero']:,} ({100*filter_stats['filtered_by_zero']/total_mutations:.1f}%)" if total_mutations > 0 else "  - Zero mutations:                   0 (0.0%)")
+        print(f"  - Duplicate codon targets:          {filter_stats['filtered_by_duplicates']:,} ({100*filter_stats['filtered_by_duplicates']/total_mutations:.1f}%)" if total_mutations > 0 else "  - Duplicate codon targets:          0 (0.0%)")
+        print()
+
+        # Sanity check
+        sum_filtered = (filter_stats['filtered_by_too_many'] +
+                       filter_stats['filtered_by_zero'] +
+                       filter_stats['filtered_by_duplicates'])
+        if sum_filtered != filtered_mutations:
+            print(f"WARNING: Filtered mutation counts don't match! Sum of categories: {sum_filtered:,}, Expected: {filtered_mutations:,}")
+        else:
+            print("Sanity check passed: Sum of filtered categories matches total filtered mutations.")
+
+        print("=" * 60 + "\n")
 
         all_counts_df.to_csv(all_counts_path, index=False)
         if all_pcps_path is not None:
