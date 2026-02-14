@@ -282,7 +282,8 @@ class CountsHelper:
         print(f"Number of nodes passing filter: {n_passing_filters}")
 
         all_counts_df.to_csv(all_counts_path, index=False)
-        all_pcps_df.to_csv(all_pcps_path, index=False)
+        if all_pcps_path is not None:
+            all_pcps_df.to_csv(all_pcps_path, index=False)
 
         return None
 
@@ -294,7 +295,7 @@ def main():
     parser.add_argument('--fasta_path', required=True, help='Path to reference FASTA file')
     parser.add_argument('--gtf_path', required=True, help='Path to GTF annotation file')
     parser.add_argument('--all_counts_path', required=True, help='Output path for mutation counts CSV')
-    parser.add_argument('--all_pcps_path', required=True, help='Output path for parent-child pairs CSV')
+    parser.add_argument('--all_pcps_path', required=False, default=None, help='Output path for parent-child pairs CSV (optional)')
     
     # Parse arguments
     args = parser.parse_args()
