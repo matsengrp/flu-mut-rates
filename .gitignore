@@ -2,3 +2,4 @@ results*/
 data/
 .snakemake/
 scripts/__pycache__
+run.sbatch
