@@ -76,6 +76,13 @@ final_outputs.extend([
     f"{config['output_dir']}/site_specific_mutation_rates.csv"
 ])
 
+# Add neutral model outputs to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/neutral_model/base/model_performance.csv",
+    f"{config['output_dir']}/neutral_model/local_context/model_performance.csv",
+    f"{config['output_dir']}/neutral_model/local_context+global_context/model_performance.csv"
+])
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -166,6 +173,28 @@ rule compute_rates:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             compute_rates.ipynb &> ../{log}
+        """
+
+# Fit neutral linear models to synonymous mutation rates
+rule fit_neutral_models:
+    input:
+        script="scripts/rates_model.py",
+        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv"
+    output:
+        # Base model outputs (no factors)
+        base_expected="{output_dir}/neutral_model/base/expected_rates_by_predictor.csv",
+        base_performance="{output_dir}/neutral_model/base/model_performance.csv",
+        # Local context model outputs (motif only)
+        local_expected="{output_dir}/neutral_model/local_context/expected_rates_by_predictor.csv",
+        local_performance="{output_dir}/neutral_model/local_context/model_performance.csv",
+        # Local + global context model outputs (motif + segment)
+        full_expected="{output_dir}/neutral_model/local_context+global_context/expected_rates_by_predictor.csv",
+        full_performance="{output_dir}/neutral_model/local_context+global_context/model_performance.csv"
+    log:
+        "logs/{output_dir}/fit_neutral_models.log"
+    shell:
+        """
+        python {input.script} &> {log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
