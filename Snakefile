@@ -76,6 +76,11 @@ final_outputs.extend([
     f"{config['output_dir']}/site_specific_mutation_rates.csv"
 ])
 
+# Add genome-wide rates analysis notebook to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/.analyze_genome_wide_rates.done"
+])
+
 # Add neutral model outputs to final targets
 final_outputs.extend([
     f"{config['output_dir']}/neutral_model/base/model_performance.csv",
@@ -173,6 +178,26 @@ rule compute_rates:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             compute_rates.ipynb &> ../{log}
+        """
+
+# Analyze genome-wide mutation rates and create visualizations
+rule analyze_genome_wide_rates:
+    input:
+        notebook="notebooks/analyze_genome_wide_rates.ipynb",
+        genome_wide_rates="{output_dir}/genome_wide_rates.csv"
+    output:
+        touch("{output_dir}/.analyze_genome_wide_rates.done")
+    log:
+        "logs/{output_dir}/analyze_genome_wide_rates.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            analyze_genome_wide_rates.ipynb &> ../{log}
         """
 
 # Fit neutral linear models to synonymous mutation rates
