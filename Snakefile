@@ -10,6 +10,27 @@ def get_subtypes_for_segment(segment):
     else:
         return ["all"]
 
+def get_all_mutation_count_files():
+    """Generate list of all mutation_counts.csv files (global + host-specific)"""
+    files = []
+
+    # Global mutation counts (no host subdirectory)
+    for segment in config["segments"]:
+        for subtype in get_subtypes_for_segment(segment):
+            files.append(
+                f"{config['output_dir']}/{segment}/{subtype}/mutation_counts.csv"
+            )
+
+    # Host-specific mutation counts (human and avian only, excluding swine)
+    for segment in config["segments"]:
+        for subtype in get_subtypes_for_segment(segment):
+            for host in config["host_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
+                )
+
+    return files
+
 # Generate all segment-subtype-host combinations for host-specific trees
 segment_subtype_host_combinations = []
 for segment in config["segments"]:
@@ -45,6 +66,15 @@ final_outputs.extend(expand(
     output_dir=config["output_dir"],
     segment=["HA", "NA"]
 ))
+
+# Add compute_rates outputs to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/counts.csv",
+    f"{config['output_dir']}/genome_wide_rates.csv",
+    f"{config['output_dir']}/motif_level_genome_wide_rates.csv",
+    f"{config['output_dir']}/evo_opp_thresholds.csv",
+    f"{config['output_dir']}/site_specific_mutation_rates.csv"
+])
 
 # Main rule to define target outputs
 rule all:
@@ -112,6 +142,30 @@ rule count_mutations:
             --gtf_path {input.gtf_path} \
             --all_counts_path {output.all_counts_path} \
             --all_pcps_path {output.all_pcps_path} &> {log}
+        """
+
+# Compute genome-wide and site-specific mutation rates from all mutation count data
+rule compute_rates:
+    input:
+        notebook="notebooks/compute_rates.ipynb",
+        mutation_counts=get_all_mutation_count_files()
+    output:
+        counts="{output_dir}/counts.csv",
+        genome_wide_rates="{output_dir}/genome_wide_rates.csv",
+        motif_rates="{output_dir}/motif_level_genome_wide_rates.csv",
+        evo_opp_thresholds="{output_dir}/evo_opp_thresholds.csv",
+        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv"
+    log:
+        "logs/{output_dir}/compute_rates.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            compute_rates.ipynb &> ../{log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
