@@ -9,6 +9,8 @@ ha_subtypes:
 na_subtypes:
   - "N1"
   - "N2"
+  - "N6"
+  - "N8"
   - "N9"
 
 segments:
@@ -24,7 +26,6 @@ segments:
 host_groups:
   - "human"
   - "avian"
-  - "swine"
 
 # Data directory paths
 data_dir: "../flu-usher/results"
