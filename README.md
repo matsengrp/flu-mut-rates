@@ -8,6 +8,7 @@ This pipeline calculates synonymous and non-synonymous mutation rates across inf
 
 ### Directory Structure
 
+```
 flu-syn-rates/
 ├── Snakefile             # Main workflow definition
 ├── config.yaml           # Configuration file
@@ -40,6 +41,7 @@ flu-syn-rates/
 │   └── NA/
 │       └── ...
 └── results/              # Output directory
+```
 
 ### Configuration
 
