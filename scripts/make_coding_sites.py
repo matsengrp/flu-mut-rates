@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--gff_file', required=True, help='Path to GFF annotation file')
     parser.add_argument('--subtype', required=True, help='Influenza subtype (e.g., H1N1, H3N2)')
     parser.add_argument('--segment', required=True, help='Gene segment (e.g., HA, NA)')
+    parser.add_argument('--ignore_genes', nargs='*', default=[],
+                        help='Gene names to exclude from coding site mapping (e.g. PB1-F2)')
     args = parser.parse_args()
 
     # Read in the reference sequence from the FASTA file, assuming it is the first sequence
@@ -60,6 +62,10 @@ def main():
                 'strand': cdss[0][2]  # Assume all CDSs have same strand
             }
     
+    if args.ignore_genes:
+        genes_info = {name: data for name, data in genes_info.items() if name not in args.ignore_genes}
+        print(f"Ignoring genes: {args.ignore_genes}")
+
     print(f"Found {len(genes_info)} genes: {list(genes_info.keys())}")
     
     # Create output directory and protein sequences subdirectory if they don't exist
