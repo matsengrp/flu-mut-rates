@@ -85,7 +85,8 @@ final_outputs.extend([
 final_outputs.extend([
     f"{config['output_dir']}/neutral_model/base/model_performance.csv",
     f"{config['output_dir']}/neutral_model/local_context/model_performance.csv",
-    f"{config['output_dir']}/neutral_model/local_context+global_context/model_performance.csv"
+    f"{config['output_dir']}/neutral_model/local_context+global_context/model_performance.csv",
+    f"{config['output_dir']}/expected_rates.csv"
 ])
 
 # Main rule to define target outputs
@@ -220,6 +221,24 @@ rule fit_neutral_models:
     shell:
         """
         python {input.script} &> {log}
+        """
+
+# Augment neutral model expected rates with CG and GC mutation types
+rule augment_expected_rates:
+    input:
+        script="scripts/augment_expected_rates.py",
+        segment_wide_rates="{output_dir}/segment_wide_rates.csv",
+        full_expected="{output_dir}/neutral_model/local_context+global_context/expected_rates_by_predictor.csv"
+    output:
+        expected_rates="{output_dir}/expected_rates.csv"
+    log:
+        "logs/{output_dir}/augment_expected_rates.log"
+    shell:
+        """
+        python {input.script} \
+            --segment_wide_rates {input.segment_wide_rates} \
+            --input_file {input.full_expected} \
+            --output_file {output.expected_rates} &> {log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
