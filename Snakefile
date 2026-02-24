@@ -103,6 +103,10 @@ rule make_coding_sites:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
     log:
         "logs/{output_dir}/{segment}_{subtype}_coding_sites.log"
+    params:
+        ignore_genes=lambda wildcards: " ".join(
+            config.get("ignore_genes", {}).get(wildcards.segment, [])
+        )
     shell:
         """
         python scripts/make_coding_sites.py \
@@ -110,7 +114,8 @@ rule make_coding_sites:
             --gff_file {input.gff_file} \
             --subtype {wildcards.subtype} \
             --segment {wildcards.segment} \
-            --output_directory {wildcards.output_dir}/{wildcards.segment}/{wildcards.subtype} &> {log}
+            --output_directory {wildcards.output_dir}/{wildcards.segment}/{wildcards.subtype} \
+            --ignore_genes {params.ignore_genes} &> {log}
         """
 
 # Count mutations along host-specific trees

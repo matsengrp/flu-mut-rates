@@ -30,3 +30,8 @@ host_groups:
 # Data directory paths
 data_dir: "../flu-usher/results"
 output_dir: "results"
+
+# Optional: genes to ignore in specific segments during coding site creation
+ignore_genes:
+  PB1:
+    - "PB1-F2"
