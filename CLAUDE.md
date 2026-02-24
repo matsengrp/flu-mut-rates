@@ -64,7 +64,7 @@ The pipeline expects input from flu-usher with the following structure:
 ```
 
 ### Output Structure
-Results are organized by segment and subtype:
+Results are organized by segment and subtype, plus genome-wide analyses:
 ```
 results/
 ├── HA/
@@ -72,7 +72,10 @@ results/
 │   │   ├── coding_sites.csv
 │   │   ├── mutation_counts.csv
 │   │   ├── parent_child_pairs.csv
-│   │   └── protein_sequences/
+│   │   ├── human/
+│   │   │   └── mutation_counts.csv
+│   │   └── avian/
+│   │       └── mutation_counts.csv
 │   └── {H3,H5,H7,H9}/
 ├── NA/
 │   ├── N1/
@@ -80,9 +83,20 @@ results/
 │   └── N9/
 ├── {PB2,PB1,PA,NP,MP,NS}/
 │   └── all/
-└── aligned_proteins/
-    ├── HA/     # Cross-subtype alignments
-    └── NA/     # Cross-subtype alignments
+├── aligned_proteins/
+│   ├── HA/     # Cross-subtype alignments
+│   └── NA/     # Cross-subtype alignments
+├── counts.csv                          # Aggregated mutation counts
+├── genome_wide_rates.csv               # Genome-wide mutation rates
+├── segment_wide_rates.csv              # Segment-specific rates
+├── motif_level_genome_wide_rates.csv   # Context-dependent rates
+├── evo_opp_thresholds.csv              # Evolutionary opportunity filters
+├── site_specific_mutation_rates.csv    # Per-site rates
+├── expected_rates.csv                  # Complete rates table (all 12 mutation types)
+└── neutral_model/
+    ├── base/                           # Mutation type only
+    ├── local_context/                  # Mutation type + motif
+    └── local_context+global_context/   # Mutation type + motif + segment
 ```
 
 ### Key Components
@@ -92,37 +106,43 @@ results/
    - Manages dependencies between analysis steps
    - Coordinates parallel execution
 
-2. **config/config.yaml**: Configuration file containing:
+2. **config.yaml**: Configuration file containing:
    - Input data directory (`../flu-usher/results`)
    - HA subtypes: H1, H3, H5, H7, H9
-   - NA subtypes: N1, N2, N9
-   - All genome segments to analyze
+   - NA subtypes: N1, N2, N6, N8, N9
+   - Host groups: human, avian
+   - All genome segments to analyze (PB2, PB1, PA, HA, NP, NA, MP, NS)
 
 3. **scripts/**: Python scripts for analysis:
    - `make_coding_sites.py`: Maps nucleotide positions to codons and genes
    - `make_count_dfs.py`: Traverses trees to count mutations and classify them
    - `align_proteins.py`: Aligns proteins across subtypes (HA/NA only)
+   - `rates_model.py`: Fits neutral log-linear models to mutation rates
+   - `augment_expected_rates.py`: Adds CG/GC mutation types to expected rates
    - `MATWrapper.py`: Interface to MAT (Mutation Annotated Tree) format
-   - `counts_model.py`: Statistical modeling of mutation rates
    - `ExpectedCalc.py`: Calculate expected mutation counts
+   - `basic_plots.py`: Plotting utilities
 
-4. **notebooks/**: Jupyter notebooks for interactive analysis
-   - Various analysis and visualization notebooks
-   - May need updates for the new directory structure
+4. **notebooks/**: Jupyter notebooks executed as part of pipeline:
+   - `compute_rates.ipynb`: Calculates mutation rates from count data
+   - `analyze_genome_wide_rates.ipynb`: Visualizes and analyzes genome-wide rates
 
 ### Pipeline Workflow
 
 1. **Create Coding Sites** → Maps nucleotide positions to codon positions using GFF annotations
-2. **Extract Protein Sequences** → Translates gene sequences to amino acids
-3. **Count Mutations** → Traverses phylogenetic trees to count and classify mutations
-4. **Align Proteins** → Cross-subtype protein alignments (HA and NA only)
-5. **Statistical Analysis** → Model mutation rates and fitness effects
+2. **Count Mutations** → Traverses phylogenetic trees (global and host-specific) to count and classify mutations
+3. **Align Proteins** → Cross-subtype protein alignments (HA and NA only)
+4. **Compute Mutation Rates** → Aggregates counts and calculates genome-wide, segment-wide, motif-level, and site-specific rates
+5. **Analyze Genome-Wide Rates** → Executes analysis notebook to visualize rates and compare across hosts/viruses
+6. **Fit Neutral Models** → Fits log-linear models (base, local context, full) to predict synonymous mutation rates
+7. **Augment Expected Rates** → Creates complete expected rates table with all 12 mutation types (adds CG/GC empirical rates)
 
 ### Input Requirements
 
 From flu-usher pipeline:
-- `opt_tree.pb.gz`: Optimized phylogenetic tree in protobuf format
-- `curated_reference.fasta`: Reference sequence
+- `final_tree.pb.gz`: Global phylogenetic tree (all hosts) in protobuf format
+- `host_specific_trees/{host}_tree.pb.gz`: Host-specific phylogenetic trees (human, avian)
+- `curated_root.fasta`: Reference sequence
 - `curated_reference.gff`: Gene annotations
 - `curated_reference.gtf`: Gene transfer format annotations
 
@@ -132,8 +152,11 @@ From flu-usher pipeline:
 - HA and NA segments are analyzed by specific subtype
 - Protein alignment is only performed for HA and NA segments
 - The pipeline uses compressed tree files (.pb.gz) from UShER
-- All logs are saved in the `results/logs/` directory
+- Both global (all hosts) and host-specific trees (human, avian) are analyzed
+- Notebooks are executed automatically via `jupyter nbconvert --execute --inplace`
+- All logs are saved in the `logs/` directory
 - The pipeline can process multiple segments/subtypes in parallel
+- CG and GC mutation types are added to expected rates using empirical rates (insufficient data for model fitting)
 
 ### Common Tasks
 
@@ -142,13 +165,22 @@ From flu-usher pipeline:
 snakemake --cores 8 results/HA/H3/mutation_counts.csv results/NA/N2/mutation_counts.csv
 ```
 
-**Rerun analysis for a specific segment:**
+**Run complete genome-wide analysis:**
 ```bash
-snakemake --forcerun make_coding_sites --cores 8 results/HA/H1/coding_sites.csv
+snakemake --cores 12 results/expected_rates.csv
 ```
 
-**Generate summary statistics:**
+**Run just the neutral model fitting:**
 ```bash
-# The pipeline will create mutation_counts.csv files that can be analyzed
-# Use notebooks or custom scripts to aggregate across segments/subtypes
+snakemake --cores 8 results/neutral_model/local_context+global_context/model_performance.csv
+```
+
+**Rerun rate calculations:**
+```bash
+snakemake --forcerun compute_rates --cores 8
+```
+
+**Check host-specific mutation counts:**
+```bash
+snakemake --cores 8 results/HA/H1/human/mutation_counts.csv results/HA/H1/avian/mutation_counts.csv
 ```
