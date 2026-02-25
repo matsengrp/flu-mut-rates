@@ -18,6 +18,16 @@ def load_segment_rates(filepath):
     return filtered[['mut_type', 'segment', 'rate']]
 
 
+def load_motif_rates(filepath):
+    """Load motif-level genome-wide rates for CG/GC, host=='all'.
+
+    Returns a dict keyed by (mut_type, motif) -> rate.
+    """
+    df = pd.read_csv(filepath, keep_default_na=False)
+    filtered = df.query("mut_type in ['CG', 'GC'] and host == 'all'")
+    return dict(zip(zip(filtered['mut_type'], filtered['motif']), filtered['rate']))
+
+
 def generate_motifs(mut_type):
     """
     Generate all 16 possible 3-mer motifs for a mutation type.
@@ -29,14 +39,18 @@ def generate_motifs(mut_type):
     return sorted(motifs)
 
 
-def augment_full_model(df_existing, segment_rates):
-    """Augment full model with CG and GC entries (16 motifs × 8 segments each)."""
+def augment_full_model(df_existing, segment_rates, motif_rates):
+    """Augment full model with CG and GC entries (16 motifs × 8 segments each).
+
+    For each motif, uses the motif-specific genome-wide rate if available in
+    motif_rates, otherwise falls back to the segment-wide average rate.
+    """
     # Segment order matching rates_model.py
     segments = ['PB1', 'NS', 'NA', 'HA', 'PB2', 'MP', 'PA', 'NP']
 
     new_rows = []
     for mut_type in ['CG', 'GC']:
-        # Get segment-specific rates
+        # Get segment-specific rates (used as fallback)
         mut_rates = segment_rates[segment_rates['mut_type'] == mut_type]
 
         # Generate motifs
@@ -49,9 +63,9 @@ def augment_full_model(df_existing, segment_rates):
                 print(f"Warning: No rate found for {mut_type} in {segment}, skipping segment")
                 continue
 
-            rate = segment_rate[0]
-
             for motif in motifs:
+                # Use motif-specific rate if available, else fall back to segment rate
+                rate = motif_rates.get((mut_type, motif), segment_rate[0])
                 new_rows.append({
                     'mut_type': mut_type,
                     'segment': segment,
@@ -72,6 +86,8 @@ def main():
     )
     parser.add_argument('--segment_wide_rates', required=True,
                        help='Path to segment_wide_rates.csv')
+    parser.add_argument('--motif_level_rates', required=True,
+                       help='Path to motif_level_genome_wide_rates.csv')
     parser.add_argument('--input_file', required=True,
                        help='Path to full model expected_rates_by_predictor.csv')
     parser.add_argument('--output_file', required=True,
@@ -106,12 +122,24 @@ def main():
 
     print(f"Found CG and GC rates for all 8 segments")
 
+    # Load motif-level rates
+    print(f"\nLoading motif-level rates from {args.motif_level_rates}")
+    try:
+        motif_rates = load_motif_rates(args.motif_level_rates)
+    except FileNotFoundError:
+        print(f"Error: File not found: {args.motif_level_rates}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading motif_level_rates: {e}")
+        sys.exit(1)
+    print(f"  Loaded {len(motif_rates)} motif-specific CG/GC rates")
+
     # Load and augment full model
     print(f"\nLoading full model from: {args.input_file}")
     try:
         df_full = pd.read_csv(args.input_file, keep_default_na=False)
         print(f"  Original rows: {len(df_full)}")
-        df_full_aug = augment_full_model(df_full, segment_rates)
+        df_full_aug = augment_full_model(df_full, segment_rates, motif_rates)
         print(f"  Augmented rows: {len(df_full_aug)}")
         df_full_aug.to_csv(args.output_file, index=False)
         print(f"  Saved to {args.output_file}")
