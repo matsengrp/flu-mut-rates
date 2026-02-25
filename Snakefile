@@ -95,6 +95,11 @@ final_outputs.extend([
 # Add SHAPE-MaP processed data to final targets
 final_outputs.append(f"{config['output_dir']}/shapemap/all_data.csv")
 
+# Add site-specific rates analysis notebook to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/.analyze_site_specific_rates.done"
+])
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -210,6 +215,32 @@ rule analyze_genome_wide_rates:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             analyze_genome_wide_rates.ipynb &> ../{log}
+        """
+
+# Analyze site-specific mutation rates and create visualizations
+rule analyze_site_specific_rates:
+    input:
+        notebook="notebooks/analyze_site_specific_rates.ipynb",
+        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv",
+        segment_wide_rates="{output_dir}/segment_wide_rates.csv",
+        motif_rates="{output_dir}/motif_level_genome_wide_rates.csv",
+        local_context_performance="{output_dir}/neutral_model/local_context/model_performance.csv",
+        full_context_performance="{output_dir}/neutral_model/local_context+global_context/model_performance.csv",
+        shapemap_data="{output_dir}/shapemap/all_data.csv",
+        motif_medians="data/haddox_2025/motif_medians.csv"
+    output:
+        touch("{output_dir}/.analyze_site_specific_rates.done")
+    log:
+        "logs/{output_dir}/analyze_site_specific_rates.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            analyze_site_specific_rates.ipynb &> ../{log}
         """
 
 # Fit neutral linear models to synonymous mutation rates
