@@ -14,7 +14,7 @@ Flu-syn-rates - A Snakemake pipeline for analyzing synonymous and non-synonymous
 conda env create -f environment.yml
 
 # Activate the environment
-conda activate syn-mut-rate
+conda activate flu-syn-rate
 ```
 
 ### Running the Pipeline
