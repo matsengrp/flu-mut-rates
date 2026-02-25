@@ -65,7 +65,8 @@ class CountsHelper:
 
     def ref_motif(self, s):
         """Return the 3-mer motif centered at the site. Site indices begin at one."""
-        return self.ref_seq[s - 2 : s + 1]
+        m = self.ref_seq[s - 2 : s + 1]
+        return m if len(m) == 3 else pd.NA
 
     def fails_filters(self, nt_muts, codon_muts, max_mutations=4):
         """
@@ -137,7 +138,9 @@ class CountsHelper:
         }).reset_index()
 
         # Add the parent motif and initialize the actual count and branch length columns
-        parent_motif = lambda s: parent_seq[s - 2 : s + 1]
+        def parent_motif(s):
+            m = parent_seq[s - 2 : s + 1]
+            return m if len(m) == 3 else pd.NA
         counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
         counts_df["actual_count"] = 0
         counts_df["branch_length"] = 0
