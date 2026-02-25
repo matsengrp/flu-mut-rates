@@ -143,8 +143,8 @@ class CountsHelper:
             return m if len(m) == 3 else pd.NA
         counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
         counts_df["actual_count"] = 0
-        counts_df["branch_length"] = 0
         pcps = (parent.id, parent_seq, [])
+        n_passing_muts = 0
 
         # Initialize filter statistics
         filter_stats = {
@@ -187,12 +187,19 @@ class CountsHelper:
             filter_stats['passing_mutations'] += num_muts
 
             pcps[2].append((node.id, nt_muts))
-            counts_df["branch_length"] += len(nt_muts)
+            n_passing_muts += len(nt_muts)
             to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
             counts_df.loc[to_increment, "actual_count"] += 1
 
-        syn_actual_count = counts_df.loc[counts_df['wt_aa'] == counts_df['mut_aa'], 'actual_count'].sum()
-        counts_df["syn_branch_length"] = syn_actual_count
+        branch_length = counts_df['actual_count'].sum()
+        assert branch_length == n_passing_muts, \
+            f"branch_length ({branch_length}) != n_passing_muts ({n_passing_muts})"
+        counts_df["branch_length"] = branch_length
+        # Count synonymous mutations by checking wt_aa == mut_aa. This is valid because
+        # we already filtered out branches where two mutations target the same codon, so
+        # each nucleotide mutation affects a distinct codon and can be classified
+        # independently as synonymous or non-synonymous.
+        counts_df["syn_branch_length"] = counts_df[counts_df['wt_aa'] == counts_df['mut_aa']]['actual_count'].sum()
 
         return n_passing_filters, counts_df, pcps, filter_stats
 
