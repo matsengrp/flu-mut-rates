@@ -233,6 +233,7 @@ rule augment_expected_rates:
     input:
         script="scripts/augment_expected_rates.py",
         segment_wide_rates="{output_dir}/segment_wide_rates.csv",
+        motif_level_rates="{output_dir}/motif_level_genome_wide_rates.csv",
         full_expected="{output_dir}/neutral_model/local_context+global_context/expected_rates_by_predictor.csv"
     output:
         expected_rates="{output_dir}/expected_rates.csv"
@@ -242,6 +243,7 @@ rule augment_expected_rates:
         """
         python {input.script} \
             --segment_wide_rates {input.segment_wide_rates} \
+            --motif_level_rates {input.motif_level_rates} \
             --input_file {input.full_expected} \
             --output_file {output.expected_rates} &> {log}
         """
