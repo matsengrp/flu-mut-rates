@@ -163,7 +163,7 @@ Note: CG and GC mutation types are excluded from model fitting due to insufficie
 
 Creates a complete expected rates table:
 1. Loads fitted rates from the full model (local + global context)
-2. Adds missing CG and GC mutation types using segment-specific empirical rates
+2. Adds missing CG and GC mutation types using empirical rates: motif-specific genome-wide rates are used where available (12 of 16 motifs per type), with segment-wide rates as a fallback for the remaining motifs
 3. Generates all 16 possible 3-mer motifs for CG and GC
 4. Validates that all 12 mutation types have balanced entry counts
 5. Outputs `expected_rates.csv` with complete coverage of all mutation types

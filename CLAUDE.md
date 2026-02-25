@@ -135,7 +135,7 @@ results/
 4. **Compute Mutation Rates** → Aggregates counts and calculates genome-wide, segment-wide, motif-level, and site-specific rates
 5. **Analyze Genome-Wide Rates** → Executes analysis notebook to visualize rates and compare across hosts/viruses
 6. **Fit Neutral Models** → Fits log-linear models (base, local context, full) to predict synonymous mutation rates
-7. **Augment Expected Rates** → Creates complete expected rates table with all 12 mutation types (adds CG/GC empirical rates)
+7. **Augment Expected Rates** → Creates complete expected rates table with all 12 mutation types (adds CG/GC using motif-specific rates where available, segment-wide rates as fallback)
 
 ### Input Requirements
 
@@ -156,7 +156,7 @@ From flu-usher pipeline:
 - Notebooks are executed automatically via `jupyter nbconvert --execute --inplace`
 - All logs are saved in the `logs/` directory
 - The pipeline can process multiple segments/subtypes in parallel
-- CG and GC mutation types are added to expected rates using empirical rates (insufficient data for model fitting)
+- CG and GC mutation types are added to expected rates using empirical rates (insufficient data for model fitting): motif-specific genome-wide rates are used where available (12 of 16 motifs per type), with segment-wide rates as a fallback
 
 ### Common Tasks
 
