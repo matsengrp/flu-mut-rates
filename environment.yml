@@ -21,3 +21,5 @@ dependencies:
   - muscle
   - gffutils
   - scikit-learn
+  - papermill
+  - nbconvert
