@@ -44,6 +44,9 @@ for segment in config["segments"]:
     for subtype in get_subtypes_for_segment(segment):
         segment_subtype_combinations.append((segment, subtype))
 
+# Segments used in SHAPE-MaP analysis (HA and NA excluded per the notebook)
+shapemap_segments = [s for s in config["segments"] if s not in ["HA", "NA"]]
+
 # Final output files
 final_outputs = []
 
@@ -88,6 +91,9 @@ final_outputs.extend([
     f"{config['output_dir']}/neutral_model/local_context+global_context/model_performance.csv",
     f"{config['output_dir']}/expected_rates.csv"
 ])
+
+# Add SHAPE-MaP processed data to final targets
+final_outputs.append(f"{config['output_dir']}/shapemap/all_data.csv")
 
 # Main rule to define target outputs
 rule all:
@@ -246,6 +252,31 @@ rule augment_expected_rates:
             --motif_level_rates {input.motif_level_rates} \
             --input_file {input.full_expected} \
             --output_file {output.expected_rates} &> {log}
+        """
+
+# Process SHAPE-MaP reactivity data and align to reference sequences
+rule process_shapemap_data:
+    input:
+        excel="data/dadonaite_2019/41564_2019_513_MOESM3_ESM.xlsx",
+        ref_fastas=expand(
+            "{data_dir}/{segment}/all/curated_reference.fasta",
+            data_dir=config["data_dir"],
+            segment=shapemap_segments
+        )
+    output:
+        "{output_dir}/shapemap/all_data.csv"
+    params:
+        data_dir=config["data_dir"]
+    log:
+        "logs/{output_dir}/process_shapemap_data.log"
+    shell:
+        """
+        data_dir=$(realpath {params.data_dir}) && \
+        cd notebooks && \
+        papermill \
+            process_shapemap_data.ipynb \
+            process_shapemap_data.ipynb \
+            -p data_dir $data_dir &> ../{log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
