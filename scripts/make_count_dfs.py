@@ -191,6 +191,9 @@ class CountsHelper:
             to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
             counts_df.loc[to_increment, "actual_count"] += 1
 
+        syn_actual_count = counts_df.loc[counts_df['wt_aa'] == counts_df['mut_aa'], 'actual_count'].sum()
+        counts_df["syn_branch_length"] = syn_actual_count
+
         return n_passing_filters, counts_df, pcps, filter_stats
 
     def count_mutations_on_tree(self, max_mutations=4):
@@ -256,7 +259,8 @@ class CountsHelper:
                     .groupby(cols, as_index=False)
                     .agg({
                         'actual_count' : 'sum',
-                        'branch_length' : 'sum'
+                        'branch_length' : 'sum',
+                        'syn_branch_length' : 'sum'
                     })
                 )
 
