@@ -90,8 +90,9 @@ class CountsHelper:
         if num_muts == 0:
             return True, "zero_mutations"
 
-        unique_codons = len({(mut.gene, mut.aa_index) for mut in codon_muts})
-        if unique_codons < len(codon_muts):
+        gene_codon_pairs = {(mut.gene, mut.aa_index) for mut in codon_muts}
+        gene_codon_nuc_triples = {(mut.gene, mut.aa_index, mut.nuc) for mut in codon_muts}
+        if len(gene_codon_pairs) < len(gene_codon_nuc_triples):
             return True, "duplicate_codons"
 
         return False, None
@@ -195,6 +196,7 @@ class CountsHelper:
         assert branch_length == n_passing_muts, \
             f"branch_length ({branch_length}) != n_passing_muts ({n_passing_muts})"
         counts_df["branch_length"] = branch_length
+        
         # Count synonymous mutations by checking wt_aa == mut_aa. This is valid because
         # we already filtered out branches where two mutations target the same codon, so
         # each nucleotide mutation affects a distinct codon and can be classified
