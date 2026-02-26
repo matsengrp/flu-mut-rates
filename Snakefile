@@ -100,6 +100,13 @@ final_outputs.extend([
     f"{config['output_dir']}/.analyze_site_specific_rates.done"
 ])
 
+# Add compute_fitness_effects outputs to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/actual_expected.csv",
+    f"{config['output_dir']}/sitewise_synonymous_fitness_effects.csv",
+    f"{config['output_dir']}/aa_fitness_effects.csv"
+])
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -283,6 +290,29 @@ rule augment_expected_rates:
             --motif_level_rates {input.motif_level_rates} \
             --input_file {input.full_expected} \
             --output_file {output.expected_rates} &> {log}
+        """
+
+# Compute fitness effects of synonymous and amino-acid mutations
+rule compute_fitness_effects:
+    input:
+        notebook="notebooks/compute_fitness_effects.ipynb",
+        counts="{output_dir}/counts.csv",
+        expected_rates="{output_dir}/expected_rates.csv"
+    output:
+        actual_expected="{output_dir}/actual_expected.csv",
+        syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
+        aa_fitness="{output_dir}/aa_fitness_effects.csv"
+    log:
+        "logs/{output_dir}/compute_fitness_effects.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            compute_fitness_effects.ipynb &> ../{log}
         """
 
 # Process SHAPE-MaP reactivity data and align to reference sequences
