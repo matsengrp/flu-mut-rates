@@ -171,7 +171,7 @@ def main():
                     'site': site,
                     'codon_position': codon_pos,
                     'codon_site': codon_site_num,
-                    'gene': gene_name
+                    'gene': gene_name.upper()
                 })
         
         # If no overlapping genes, add noncoding entry
