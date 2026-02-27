@@ -110,7 +110,9 @@ final_outputs.extend([
 # Add process_dms_data outputs to final targets
 final_outputs.extend([
     f"{config['output_dir']}/dms_data/Yu_HA/processed_dms_data.csv",
-    f"{config['output_dir']}/dms_data/Bloom_NP/processed_dms_data.csv"
+    f"{config['output_dir']}/dms_data/Bloom_NP/processed_dms_data.csv",
+    f"{config['output_dir']}/.process_dms_data_soh_pb2.done",
+    f"{config['output_dir']}/.process_dms_data_wang_na.done",
 ])
 
 # Add analyze_fitness_effects to final targets
@@ -324,18 +326,16 @@ rule compute_fitness_effects:
             compute_fitness_effects.ipynb &> ../{log}
         """
 
-# Process DMS data from multiple sources
-rule process_dms_data:
+# Process HA DMS data from Yu et al.
+rule process_dms_data_yu_ha:
     input:
-        notebook="notebooks/process_dms_data.ipynb",
+        notebook="notebooks/process_dms_data_yu_ha.ipynb",
         ha_phenotypes="data/dms_data/Yu_HA/Phenotypes.csv",
-        ha_numbering="data/dms_data/Yu_HA/site_numbering_map.csv",
-        np_data="data/dms_data/Bloom_NP/Supplementary_file_1.xls"
+        ha_numbering="data/dms_data/Yu_HA/site_numbering_map.csv"
     output:
-        ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv",
-        np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv"
+        ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv"
     log:
-        "logs/{output_dir}/process_dms_data.log"
+        "logs/{output_dir}/process_dms_data_yu_ha.log"
     shell:
         """
         cd notebooks && \
@@ -344,7 +344,67 @@ rule process_dms_data:
             --execute \
             --inplace \
             --ExecutePreprocessor.timeout=600 \
-            process_dms_data.ipynb &> ../{log}
+            process_dms_data_yu_ha.ipynb &> ../{log}
+        """
+
+# Process NP DMS data from Bloom et al.
+rule process_dms_data_bloom_np:
+    input:
+        notebook="notebooks/process_dms_data_bloom_np.ipynb",
+        np_data="data/dms_data/Bloom_NP/Supplementary_file_1.xls"
+    output:
+        np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv"
+    log:
+        "logs/{output_dir}/process_dms_data_bloom_np.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_bloom_np.ipynb &> ../{log}
+        """
+
+# Process PB2 DMS data from Soh et al. (alignment QC)
+rule process_dms_data_soh_pb2:
+    input:
+        notebook="notebooks/process_dms_data_soh_pb2.ipynb",
+        pb2_data="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv"
+    output:
+        touch("{output_dir}/.process_dms_data_soh_pb2.done")
+    log:
+        "logs/{output_dir}/process_dms_data_soh_pb2.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_soh_pb2.ipynb &> ../{log}
+        """
+
+# Process NA DMS data from Wang et al. (sequence comparison)
+rule process_dms_data_wang_na:
+    input:
+        notebook="notebooks/process_dms_data_wang_na.ipynb",
+        na_data="data/dms_data/Wang_NA/msystems.00670-23-s0006.xlsx"
+    output:
+        touch("{output_dir}/.process_dms_data_wang_na.done")
+    log:
+        "logs/{output_dir}/process_dms_data_wang_na.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_wang_na.ipynb &> ../{log}
         """
 
 # Analyze fitness effects and compare to DMS data
