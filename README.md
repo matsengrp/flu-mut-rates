@@ -181,6 +181,24 @@ Outputs three CSV files at the results root:
 - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
 - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
 
+### Step 9: Process DMS Data
+
+Processes raw deep mutational scanning (DMS) data from external sources into standardized formats for comparison with fitness effects:
+1. Aligns the DMS experiment HA sequence (Yu et al.) to the H3 tree reference sequence using MUSCLE to establish site numbering correspondence
+2. Merges DMS phenotype measurements with the numbering map
+3. Processes NP DMS data (Bloom et al.) and verifies the DMS sequence matches the NP tree reference
+
+Outputs two CSV files:
+- `results/dms_data/Yu_HA/processed_dms_data.csv` - Processed HA DMS data with tree reference site numbering
+- `results/dms_data/Bloom_NP/processed_dms_data.csv` - Processed NP DMS data with log-ratio fitness effects
+
+### Step 10: Analyze Fitness Effects
+
+Executes an analysis notebook that:
+1. Plots distributions of fitness effects by mutation class across all genes
+2. Examines synonymous fitness effects across genome sites
+3. Compares evolutionary fitness effects to experimentally measured DMS effects for HA (Yu et al.), NP (Bloom et al.), and PB2 (Soh et al.)
+
 ## Running the Pipeline
 
 Execute the full pipeline with:
@@ -356,6 +374,10 @@ Located in the `results/` root directory:
        - `expected_count` — total expected mutations under the neutral model
        - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
 
+9. **Processed DMS Data**: `results/dms_data/`
+   - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al.) with tree reference site numbering
+   - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al.) with log-ratio fitness effects
+
 ### Output Structure Example
 
 ```
@@ -386,6 +408,11 @@ results/
 ├── actual_expected.csv
 ├── sitewise_synonymous_fitness_effects.csv
 ├── aa_fitness_effects.csv
+├── dms_data/
+│   ├── Yu_HA/
+│   │   └── processed_dms_data.csv
+│   └── Bloom_NP/
+│       └── processed_dms_data.csv
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv
