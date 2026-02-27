@@ -183,14 +183,24 @@ Outputs three CSV files at the results root:
 
 ### Step 9: Process DMS Data
 
-Processes raw deep mutational scanning (DMS) data from external sources into standardized formats for comparison with fitness effects:
-1. Aligns the DMS experiment HA sequence (Yu et al.) to the H3 tree reference sequence using MUSCLE to establish site numbering correspondence
-2. Merges DMS phenotype measurements with the numbering map
-3. Processes NP DMS data (Bloom et al.) and verifies the DMS sequence matches the NP tree reference
+Processes raw deep mutational scanning (DMS) data from external sources into standardized formats for comparison with fitness effects. Each experiment is handled by a separate notebook:
 
-Outputs two CSV files:
-- `results/dms_data/Yu_HA/processed_dms_data.csv` - Processed HA DMS data with tree reference site numbering
-- `results/dms_data/Bloom_NP/processed_dms_data.csv` - Processed NP DMS data with log-ratio fitness effects
+**`process_dms_data_yu_ha.ipynb`** (Yu et al., HA):
+1. Aligns the DMS experiment HA sequence to the H3 tree reference sequence using MUSCLE to establish site numbering correspondence
+2. Merges DMS phenotype measurements with the numbering map
+3. Outputs `results/dms_data/Yu_HA/processed_dms_data.csv` — processed HA DMS data with tree reference site numbering
+
+**`process_dms_data_bloom_np.ipynb`** (Bloom et al., NP):
+1. Verifies the DMS sequence matches the NP tree reference (Aichi 1968)
+2. Computes log-ratio mutation effects (log(preference / wt_preference))
+3. Outputs `results/dms_data/Bloom_NP/processed_dms_data.csv` — NP DMS data with log-ratio fitness effects
+
+**`process_dms_data_soh_pb2.ipynb`** (Soh et al., PB2):
+1. Aligns the DMS sequence to the PB2 reference using MUSCLE
+2. Verifies the alignment has no gaps and reports percent identity (QC only; raw data is used directly by Step 10)
+
+**`process_dms_data_wang_na.ipynb`** (Wang et al., NA):
+1. Reads NA DMS data and compares the DMS sequence to the N1 tree reference (sequence comparison / exploration)
 
 ### Step 10: Analyze Fitness Effects
 
@@ -377,6 +387,8 @@ Located in the `results/` root directory:
 9. **Processed DMS Data**: `results/dms_data/`
    - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al.) with tree reference site numbering
    - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al.) with log-ratio fitness effects
+   - `.process_dms_data_soh_pb2.done` - Sentinel file marking completion of Soh et al. PB2 alignment QC
+   - `.process_dms_data_wang_na.done` - Sentinel file marking completion of Wang et al. NA sequence comparison
 
 ### Output Structure Example
 
@@ -413,6 +425,8 @@ results/
 │   │   └── processed_dms_data.csv
 │   └── Bloom_NP/
 │       └── processed_dms_data.csv
+├── .process_dms_data_soh_pb2.done
+├── .process_dms_data_wang_na.done
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv
