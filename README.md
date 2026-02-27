@@ -168,6 +168,19 @@ Creates a complete expected rates table:
 4. Validates that all 12 mutation types have balanced entry counts
 5. Outputs `expected_rates.csv` with complete coverage of all mutation types
 
+### Step 8: Compute Fitness Effects
+
+Computes fitness effects of synonymous and amino acid mutations by comparing observed mutation counts to neutral model expectations:
+1. Joins `counts.csv` with `expected_rates.csv` to compute expected counts per site under the neutral model
+2. Aggregates synonymous mutations by site and wildtype nucleotide to compute per-site synonymous fitness effects
+3. Aggregates all nucleotide mutations by resulting amino acid change to compute per-amino-acid-mutation fitness effects
+4. Fitness effects are estimated as log((actual_count + 0.5) / (expected_count + 0.5))
+
+Outputs three CSV files at the results root:
+- `actual_expected.csv` - Per-mutation counts joined with neutral model expected counts
+- `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
+- `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
+
 ## Running the Pipeline
 
 Execute the full pipeline with:
@@ -198,13 +211,42 @@ The pipeline generates the following output files:
 1. **Coding Sites File**: `results/{segment}/{subtype}/coding_sites.csv`
    - Maps each nucleotide position to its coding properties
    - Shared across all analyses for a given segment/subtype combination
+   - Columns:
+     - `site` — nucleotide position in the reference sequence (0-indexed)
+     - `codon_position` — position within the codon (1, 2, 3, or `"noncoding"`)
+     - `codon_site` — index of the codon within the gene
+     - `gene` — gene name the site belongs to (or `"noncoding"`)
 
 2. **Global Tree Outputs**: `results/{segment}/{subtype}/`
    - `mutation_counts.csv` - Aggregated mutation counts across all hosts
+     - Columns:
+       - `site` — nucleotide position in the reference sequence (1-indexed)
+       - `nt_mut` — nucleotide mutation string (e.g. `"A1C"`: wildtype + position + mutant)
+       - `wt_nt` — wildtype nucleotide
+       - `mut_nt` — mutant nucleotide
+       - `gene` — gene containing the site
+       - `codon_position` — position within the codon (1, 2, or 3)
+       - `codon_site` — index of the codon within the gene (1-indexed)
+       - `wt_codon` — wildtype codon sequence
+       - `mut_codon` — mutant codon sequence
+       - `wt_aa` — wildtype amino acid (single-letter code)
+       - `mut_aa` — mutant amino acid (single-letter code)
+       - `aa_mut` — amino acid mutation string (e.g. `"M1L"`: wildtype AA + codon site + mutant AA)
+       - `parent_motif` — 3-mer sequence context of the parent node at the mutated site
+       - `actual_count` — number of times this mutation was observed across tree branches
+       - `branch_length` — total branch length over which the mutation opportunity was counted
+       - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, `"nonsense"`, or `"noncoding"`)
+       - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
    - `parent_child_pairs.csv` - Detailed branch-level mutation information
+     - Columns:
+       - `parent_name` — identifier of the parent node in the phylogenetic tree
+       - `child_name` — identifier of the child node in the phylogenetic tree
+       - `parent` — full nucleotide sequence reconstructed at the parent node
+       - `child` — full nucleotide sequence reconstructed at the child node
+       - `branch_length` — branch length between parent and child nodes
 
 3. **Host-Specific Tree Outputs**: `results/{segment}/{subtype}/{host}/`
-   - `mutation_counts.csv` - Aggregated mutation counts for the specific host group
+   - `mutation_counts.csv` - Aggregated mutation counts for the specific host group (same columns as global `mutation_counts.csv`)
 
 4. **Aligned Proteins** (HA and NA only): `results/aligned_proteins/{segment}/`
    - Cross-subtype protein alignments
@@ -215,26 +257,104 @@ Located in the `results/` root directory:
 
 5. **Mutation Rate Files**:
    - `counts.csv` - Combined mutation counts from all segments and subtypes
+     - Columns: same as `mutation_counts.csv` except `parent_motif` is renamed to `motif`, plus:
+       - `motif` — 3-mer sequence context of the mutation (centered on the mutated site)
+       - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
+       - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
+       - `segment_subtype` — combined segment and subtype label (e.g. `"HA_H1"`)
+       - `segment_length` — length of the genome segment in nucleotides
+       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `evo_opp` — evolutionary opportunity
+       - `rate` — per-site mutation rate
    - `genome_wide_rates.csv` - Mutation rates by type and class (synonymous, nonsynonymous, nonsense)
+     - Columns:
+       - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
+       - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, or `"nonsense"`)
+       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `actual_count` — total number of observed mutations of this type/class/host
+       - `evo_opp` — evolutionary opportunity
+       - `rate` — mutation rate
+       - `syn_rate` — synonymous mutation rate for the same host and mutation type
+       - `rel_rate` — rate relative to the synonymous rate (`rate / syn_rate`)
    - `segment_wide_rates.csv` - Segment-specific mutation rates
+     - Columns: same as `genome_wide_rates.csv` minus `syn_rate` and `rel_rate`, plus:
+       - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
    - `motif_level_genome_wide_rates.csv` - Context-dependent rates (3-mer motifs)
+     - Columns:
+       - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
+       - `motif` — 3-mer sequence context (centered on the mutated site)
+       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `actual_count` — total number of observed mutations for this type/motif/host
+       - `evo_opp` — evolutionary opportunity
+       - `rate` — mutation rate
    - `evo_opp_thresholds.csv` - Evolutionary opportunity thresholds for filtering
+     - Columns: same as `genome_wide_rates.csv` minus `rel_rate`, plus:
+       - `evo_opp_threshold` — minimum evolutionary opportunity a site must have to be included in rate calculations for this mutation type/class/host
    - `site_specific_mutation_rates.csv` - Per-site mutation rates
+     - Columns: same as `counts.csv`, plus:
+       - `evo_opp_threshold` — minimum evolutionary opportunity threshold for this mutation type/class/host (from `evo_opp_thresholds.csv`)
+       - `unclipped_rate` — raw per-site mutation rate before applying the floor
+       - `min_rate` — floor rate applied to sites below the evolutionary opportunity threshold (set to the synonymous genome-wide rate)
 
 6. **Neutral Model Outputs**: `results/neutral_model/`
    - `base/` - Model with mutation type only
      - `expected_rates_by_predictor.csv`
+       - Columns:
+         - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
+         - `predicted_rate` — model-predicted synonymous mutation rate
      - `model_performance.csv`
+       - Columns (same for all three models):
+         - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
+         - `mse` — mean squared error of the model fit
+         - `var` — variance of the observed rates (baseline MSE with no predictors)
+         - `r2` — R² of the model fit
    - `local_context/` - Model with mutation type + 3-mer motif
      - `expected_rates_by_predictor.csv`
+       - Columns: same as `base/expected_rates_by_predictor.csv`, plus:
+         - `motif` — 3-mer sequence context
      - `model_performance.csv`
    - `local_context+global_context/` - Model with mutation type + motif + segment
      - `expected_rates_by_predictor.csv`
+       - Columns: same as `local_context/expected_rates_by_predictor.csv`, plus:
+         - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
      - `model_performance.csv`
 
 7. **Complete Expected Rates**: `results/expected_rates.csv`
    - Full model predictions augmented with CG and GC empirical rates
    - Contains all 12 mutation types × 16 motifs × 8 segments (1536 rows)
+   - Columns: same as `local_context+global_context/expected_rates_by_predictor.csv` (`mut_type`, `segment`, `motif`, `predicted_rate`), but with complete coverage of all 12 mutation types; CG and GC rates are filled in from the augmentation step (Step 7) rather than model predictions
+
+8. **Fitness Effect Files**:
+   - `actual_expected.csv` - Per-mutation counts joined with neutral model expected counts
+     - Columns: same as `counts.csv`, plus:
+       - `predicted_rate` — neutral model predicted rate for this mutation type/motif/segment (from `expected_rates.csv`)
+       - `expected_count` — expected number of observations under the neutral model (`predicted_rate × evo_opp`)
+   - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
+     - Columns:
+       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
+       - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
+       - `gene` — gene containing the site
+       - `site` — nucleotide position in the reference sequence (1-indexed)
+       - `codon_site` — index of the codon within the gene (1-indexed)
+       - `wt_nt` — wildtype nucleotide at this site
+       - `actual_count` — total observed synonymous mutations away from `wt_nt` at this site
+       - `expected_count` — total expected synonymous mutations under the neutral model
+       - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
+   - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
+     - Columns:
+       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
+       - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
+       - `gene` — gene containing the site
+       - `codon_site` — index of the codon within the gene (1-indexed)
+       - `wt_aa` — wildtype amino acid (single-letter code)
+       - `mut_aa` — mutant amino acid (single-letter code)
+       - `aa_mut` — amino acid mutation string (e.g. `"M1L"`)
+       - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, or `"nonsense"`)
+       - `actual_count` — total observed nucleotide mutations resulting in this amino acid change
+       - `expected_count` — total expected mutations under the neutral model
+       - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
 
 ### Output Structure Example
 
@@ -263,6 +383,9 @@ results/
 ├── evo_opp_thresholds.csv
 ├── site_specific_mutation_rates.csv
 ├── expected_rates.csv
+├── actual_expected.csv
+├── sitewise_synonymous_fitness_effects.csv
+├── aa_fitness_effects.csv
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv
