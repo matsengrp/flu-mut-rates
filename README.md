@@ -376,26 +376,7 @@ Located in the `results/` root directory:
 
 9. **Processed DMS Data**: `results/dms_data/`
    - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al.) with tree reference site numbering
-     - Columns:
-       - `site` — site index in the DMS experiment (1-indexed)
-       - `wt_aa` — wildtype amino acid
-       - `mut_aa` — mutant amino acid
-       - `sera_escape` — serum escape effect from DMS experiment
-       - `dms_effect` — cell entry effect from DMS experiment
-       - `pH_stability` — pH stability effect from DMS experiment
-       - `sequential_site` — sequential site index in the DMS experiment
-       - `n_nt_changes` — number of nucleotide changes required for the amino acid mutation
-       - `tree_reference_site` — corresponding codon site in the H3 tree reference sequence
-       - `reference_site` — site index in the DMS experiment's own reference numbering
-       - `sequential_wt` — wildtype amino acid in sequential DMS numbering
    - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al.) with log-ratio fitness effects
-     - Columns:
-       - `site` — codon site in the NP reference sequence (matches tree reference numbering)
-       - `wt_aa` — wildtype amino acid
-       - `mut_aa` — mutant amino acid
-       - `preference` — mutant amino acid preference from DMS experiment
-       - `wt_preference` — wildtype amino acid preference from DMS experiment
-       - `dms_effect` — log(preference / wt_preference)
 
 ### Output Structure Example
 
