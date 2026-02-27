@@ -181,6 +181,24 @@ Outputs three CSV files at the results root:
 - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
 - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
 
+### Step 9: Process DMS Data
+
+Processes raw deep mutational scanning (DMS) data from external sources into standardized formats for comparison with fitness effects:
+1. Aligns the DMS experiment HA sequence (Yu et al.) to the H3 tree reference sequence using MUSCLE to establish site numbering correspondence
+2. Merges DMS phenotype measurements with the numbering map
+3. Processes NP DMS data (Bloom et al.) and verifies the DMS sequence matches the NP tree reference
+
+Outputs two CSV files:
+- `results/dms_data/Yu_HA/processed_dms_data.csv` - Processed HA DMS data with tree reference site numbering
+- `results/dms_data/Bloom_NP/processed_dms_data.csv` - Processed NP DMS data with log-ratio fitness effects
+
+### Step 10: Analyze Fitness Effects
+
+Executes an analysis notebook that:
+1. Plots distributions of fitness effects by mutation class across all genes
+2. Examines synonymous fitness effects across genome sites
+3. Compares evolutionary fitness effects to experimentally measured DMS effects for HA (Yu et al.), NP (Bloom et al.), and PB2 (Soh et al.)
+
 ## Running the Pipeline
 
 Execute the full pipeline with:
@@ -356,6 +374,29 @@ Located in the `results/` root directory:
        - `expected_count` — total expected mutations under the neutral model
        - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
 
+9. **Processed DMS Data**: `results/dms_data/`
+   - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al.) with tree reference site numbering
+     - Columns:
+       - `site` — site index in the DMS experiment (1-indexed)
+       - `wt_aa` — wildtype amino acid
+       - `mut_aa` — mutant amino acid
+       - `sera_escape` — serum escape effect from DMS experiment
+       - `dms_effect` — cell entry effect from DMS experiment
+       - `pH_stability` — pH stability effect from DMS experiment
+       - `sequential_site` — sequential site index in the DMS experiment
+       - `n_nt_changes` — number of nucleotide changes required for the amino acid mutation
+       - `tree_reference_site` — corresponding codon site in the H3 tree reference sequence
+       - `reference_site` — site index in the DMS experiment's own reference numbering
+       - `sequential_wt` — wildtype amino acid in sequential DMS numbering
+   - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al.) with log-ratio fitness effects
+     - Columns:
+       - `site` — codon site in the NP reference sequence (matches tree reference numbering)
+       - `wt_aa` — wildtype amino acid
+       - `mut_aa` — mutant amino acid
+       - `preference` — mutant amino acid preference from DMS experiment
+       - `wt_preference` — wildtype amino acid preference from DMS experiment
+       - `dms_effect` — log(preference / wt_preference)
+
 ### Output Structure Example
 
 ```
@@ -386,6 +427,11 @@ results/
 ├── actual_expected.csv
 ├── sitewise_synonymous_fitness_effects.csv
 ├── aa_fitness_effects.csv
+├── dms_data/
+│   ├── Yu_HA/
+│   │   └── processed_dms_data.csv
+│   └── Bloom_NP/
+│       └── processed_dms_data.csv
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv

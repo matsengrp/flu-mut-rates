@@ -107,6 +107,15 @@ final_outputs.extend([
     f"{config['output_dir']}/aa_fitness_effects.csv"
 ])
 
+# Add process_dms_data outputs to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/dms_data/Yu_HA/processed_dms_data.csv",
+    f"{config['output_dir']}/dms_data/Bloom_NP/processed_dms_data.csv"
+])
+
+# Add analyze_fitness_effects to final targets
+final_outputs.append(f"{config['output_dir']}/.analyze_fitness_effects.done")
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -313,6 +322,53 @@ rule compute_fitness_effects:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             compute_fitness_effects.ipynb &> ../{log}
+        """
+
+# Process DMS data from multiple sources
+rule process_dms_data:
+    input:
+        notebook="notebooks/process_dms_data.ipynb",
+        ha_phenotypes="data/dms_data/Yu_HA/Phenotypes.csv",
+        ha_numbering="data/dms_data/Yu_HA/site_numbering_map.csv",
+        np_data="data/dms_data/Bloom_NP/Supplementary_file_1.xls"
+    output:
+        ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv",
+        np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv"
+    log:
+        "logs/{output_dir}/process_dms_data.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data.ipynb &> ../{log}
+        """
+
+# Analyze fitness effects and compare to DMS data
+rule analyze_fitness_effects:
+    input:
+        notebook="notebooks/analyze_fitness_effects.ipynb",
+        aa_fitness="{output_dir}/aa_fitness_effects.csv",
+        syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
+        ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv",
+        np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv",
+        pb2_dms="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv"
+    output:
+        touch("{output_dir}/.analyze_fitness_effects.done")
+    log:
+        "logs/{output_dir}/analyze_fitness_effects.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            analyze_fitness_effects.ipynb &> ../{log}
         """
 
 # Process SHAPE-MaP reactivity data and align to reference sequences
