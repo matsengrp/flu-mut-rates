@@ -18,9 +18,7 @@ flu-syn-rates/
 │   ├── align_proteins.py           # Align proteins across subtypes
 │   ├── rates_model.py              # Fit neutral models to mutation rates
 │   ├── augment_expected_rates.py   # Add CG/GC to expected rates table
-│   ├── MATWrapper.py               # Interface to MAT tree format
-│   ├── ExpectedCalc.py             # Calculate expected mutation counts
-│   └── basic_plots.py              # Plotting utilities
+│   └── ExpectedCalc.py             # Calculate expected mutation counts
 ├── notebooks/
 │   ├── compute_rates.ipynb              # Calculate mutation rates
 │   ├── analyze_genome_wide_rates.ipynb  # Visualize and analyze rates

@@ -119,9 +119,7 @@ results/
    - `align_proteins.py`: Aligns proteins across subtypes (HA/NA only)
    - `rates_model.py`: Fits neutral log-linear models to mutation rates
    - `augment_expected_rates.py`: Adds CG/GC mutation types to expected rates
-   - `MATWrapper.py`: Interface to MAT (Mutation Annotated Tree) format
    - `ExpectedCalc.py`: Calculate expected mutation counts
-   - `basic_plots.py`: Plotting utilities
 
 4. **notebooks/**: Jupyter notebooks executed as part of pipeline:
    - `compute_rates.ipynb`: Calculates mutation rates from count data
