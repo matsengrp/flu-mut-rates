@@ -131,7 +131,7 @@ rule make_coding_sites:
     output:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
     log:
-        "logs/{output_dir}/{segment}_{subtype}_coding_sites.log"
+        "logs/{segment}/{subtype}/coding_sites.log"
     params:
         ignore_genes=lambda wildcards: " ".join(
             config.get("ignore_genes", {}).get(wildcards.segment, [])
@@ -157,7 +157,7 @@ rule count_mutations_host_trees:
     output:
         all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv"
     log:
-        "logs/{output_dir}/{segment}_{subtype}_{host}_mutation_counts.log"
+        "logs/{segment}/{subtype}/{host}/mutation_counts.log"
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -179,7 +179,7 @@ rule count_mutations:
         all_counts_path="{output_dir}/{segment}/{subtype}/mutation_counts.csv",
         all_pcps_path="{output_dir}/{segment}/{subtype}/parent_child_pairs.csv"
     log:
-        "logs/{output_dir}/{segment}_{subtype}_mutation_counts.log"
+        "logs/{segment}/{subtype}/mutation_counts.log"
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -203,7 +203,7 @@ rule compute_rates:
         evo_opp_thresholds="{output_dir}/evo_opp_thresholds.csv",
         site_specific_rates="{output_dir}/site_specific_mutation_rates.csv"
     log:
-        "logs/{output_dir}/compute_rates.log"
+        "logs/compute_rates.log"
     shell:
         """
         cd notebooks && \
@@ -223,7 +223,7 @@ rule analyze_genome_wide_rates:
     output:
         touch("{output_dir}/.analyze_genome_wide_rates.done")
     log:
-        "logs/{output_dir}/analyze_genome_wide_rates.log"
+        "logs/analyze_genome_wide_rates.log"
     shell:
         """
         cd notebooks && \
@@ -249,7 +249,7 @@ rule analyze_site_specific_rates:
     output:
         touch("{output_dir}/.analyze_site_specific_rates.done")
     log:
-        "logs/{output_dir}/analyze_site_specific_rates.log"
+        "logs/analyze_site_specific_rates.log"
     shell:
         """
         cd notebooks && \
@@ -277,7 +277,7 @@ rule fit_neutral_models:
         full_expected="{output_dir}/neutral_model/local_context+global_context/expected_rates_by_predictor.csv",
         full_performance="{output_dir}/neutral_model/local_context+global_context/model_performance.csv"
     log:
-        "logs/{output_dir}/fit_neutral_models.log"
+        "logs/fit_neutral_models.log"
     shell:
         """
         python {input.script} &> {log}
@@ -293,7 +293,7 @@ rule augment_expected_rates:
     output:
         expected_rates="{output_dir}/expected_rates.csv"
     log:
-        "logs/{output_dir}/augment_expected_rates.log"
+        "logs/augment_expected_rates.log"
     shell:
         """
         python {input.script} \
@@ -314,7 +314,7 @@ rule compute_fitness_effects:
         syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
         aa_fitness="{output_dir}/aa_fitness_effects.csv"
     log:
-        "logs/{output_dir}/compute_fitness_effects.log"
+        "logs/compute_fitness_effects.log"
     shell:
         """
         cd notebooks && \
@@ -335,7 +335,7 @@ rule process_dms_data_yu_ha:
     output:
         ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv"
     log:
-        "logs/{output_dir}/process_dms_data_yu_ha.log"
+        "logs/process_dms_data_yu_ha.log"
     shell:
         """
         cd notebooks && \
@@ -355,7 +355,7 @@ rule process_dms_data_bloom_np:
     output:
         np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv"
     log:
-        "logs/{output_dir}/process_dms_data_bloom_np.log"
+        "logs/process_dms_data_bloom_np.log"
     shell:
         """
         cd notebooks && \
@@ -375,7 +375,7 @@ rule process_dms_data_soh_pb2:
     output:
         touch("{output_dir}/.process_dms_data_soh_pb2.done")
     log:
-        "logs/{output_dir}/process_dms_data_soh_pb2.log"
+        "logs/process_dms_data_soh_pb2.log"
     shell:
         """
         cd notebooks && \
@@ -395,7 +395,7 @@ rule process_dms_data_wang_na:
     output:
         touch("{output_dir}/.process_dms_data_wang_na.done")
     log:
-        "logs/{output_dir}/process_dms_data_wang_na.log"
+        "logs/process_dms_data_wang_na.log"
     shell:
         """
         cd notebooks && \
@@ -419,7 +419,7 @@ rule analyze_fitness_effects:
     output:
         touch("{output_dir}/.analyze_fitness_effects.done")
     log:
-        "logs/{output_dir}/analyze_fitness_effects.log"
+        "logs/analyze_fitness_effects.log"
     shell:
         """
         cd notebooks && \
@@ -445,7 +445,7 @@ rule process_shapemap_data:
     params:
         data_dir=config["data_dir"]
     log:
-        "logs/{output_dir}/process_shapemap_data.log"
+        "logs/process_shapemap_data.log"
     shell:
         """
         data_dir=$(realpath {params.data_dir}) && \
@@ -468,7 +468,7 @@ rule align_proteins:
         # Output directory marker (you could also specify specific aligned files)
         aligned_dir=directory("{output_dir}/aligned_proteins/{segment}")
     log:
-        "logs/{output_dir}/align_proteins_{segment}.log"
+        "logs/{segment}/align_proteins.log"
     wildcard_constraints:
         segment="HA|NA"
     params:
