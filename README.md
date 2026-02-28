@@ -23,7 +23,8 @@ flu-syn-rates/
 │   └── basic_plots.py              # Plotting utilities
 ├── notebooks/
 │   ├── compute_rates.ipynb              # Calculate mutation rates
-│   └── analyze_genome_wide_rates.ipynb  # Visualize and analyze rates
+│   ├── analyze_genome_wide_rates.ipynb  # Visualize and analyze rates
+│   └── summarize_filter_logs.ipynb      # Summarize mutation filter statistics from log files
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── HA/
@@ -208,6 +209,18 @@ Executes an analysis notebook that:
 1. Plots distributions of fitness effects by mutation class across all genes
 2. Examines synonymous fitness effects across genome sites
 3. Compares evolutionary fitness effects to experimentally measured DMS effects for HA (Yu et al.), NP (Bloom et al.), and PB2 (Soh et al.)
+
+### Step 11: Summarize Mutation Filter Logs
+
+Executes a diagnostic notebook that parses the log files produced by the mutation-counting rules and consolidates filter statistics across all trees. For each tree (global and host-specific), the notebook reports:
+- Total nodes and internal nodes
+- Branch counts: total examined, passing, and filtered
+- Mutation counts: total, passing, and filtered (broken down by reason: too many mutations, zero mutations, duplicate codon targets)
+
+The notebook produces three figures:
+1. Branch filter summary per tree: passing branch counts (log scale) and % passing, grouped by host
+2. Mutation filter summary per tree: passing mutation counts (log scale) and % passing, grouped by host
+3. Stacked bar breakdown of % mutations by filter reason, faceted by host
 
 ## Running the Pipeline
 
@@ -427,6 +440,7 @@ results/
 │       └── processed_dms_data.csv
 ├── .process_dms_data_soh_pb2.done
 ├── .process_dms_data_wang_na.done
+├── .summarize_filter_logs.done
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv

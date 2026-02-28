@@ -118,6 +118,9 @@ final_outputs.extend([
 # Add analyze_fitness_effects to final targets
 final_outputs.append(f"{config['output_dir']}/.analyze_fitness_effects.done")
 
+# Add summarize_filter_logs notebook to final targets
+final_outputs.append(f"{config['output_dir']}/.summarize_filter_logs.done")
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -480,4 +483,24 @@ rule align_proteins:
             --segment {wildcards.segment} \
             --subtypes {params.subtypes} \
             --muscle_path muscle &> {log}
+        """
+
+# Summarize mutation filter statistics across all trees from log files
+rule summarize_filter_logs:
+    input:
+        notebook="notebooks/summarize_filter_logs.ipynb",
+        mutation_counts=get_all_mutation_count_files()
+    output:
+        touch("{output_dir}/.summarize_filter_logs.done")
+    log:
+        "logs/summarize_filter_logs.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            summarize_filter_logs.ipynb &> ../{log}
         """
