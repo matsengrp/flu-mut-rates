@@ -115,6 +115,7 @@ final_outputs.extend([
     f"{config['output_dir']}/dms_data/Wang_NA/processed_dms_data.csv",
     f"{config['output_dir']}/dms_data/Li_PB1/processed_dms_data.csv",
     f"{config['output_dir']}/dms_data/Hom_M1/processed_dms_data.csv",
+    f"{config['output_dir']}/dms_data/Teo_NEP/processed_dms_data.csv",
 ])
 
 # Add analyze_fitness_effects to final targets
@@ -453,6 +454,26 @@ rule process_dms_data_hom_m1:
             process_dms_data_hom_m1.ipynb &> ../{log}
         """
 
+# Process NEP DMS data from Teo et al.
+rule process_dms_data_teo_nep:
+    input:
+        notebook="notebooks/process_dms_data_teo_nep.ipynb",
+        nep_data="data/dms_data/Teo_NEP/mmc2.xlsx"
+    output:
+        nep_dms="{output_dir}/dms_data/Teo_NEP/processed_dms_data.csv"
+    log:
+        "logs/process_dms_data_teo_nep.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_teo_nep.ipynb &> ../{log}
+        """
+
 # Analyze fitness effects and compare to DMS data
 rule analyze_fitness_effects:
     input:
@@ -464,7 +485,8 @@ rule analyze_fitness_effects:
         pb2_dms="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv",
         na_dms="{output_dir}/dms_data/Wang_NA/processed_dms_data.csv",
         pb1_dms="{output_dir}/dms_data/Li_PB1/processed_dms_data.csv",
-        m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv"
+        m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv",
+        nep_dms="{output_dir}/dms_data/Teo_NEP/processed_dms_data.csv"
     output:
         touch("{output_dir}/.analyze_fitness_effects.done")
     log:

@@ -20,9 +20,20 @@ flu-syn-rates/
 │   ├── augment_expected_rates.py   # Add CG/GC to expected rates table
 │   └── ExpectedCalc.py             # Calculate expected mutation counts
 ├── notebooks/
-│   ├── compute_rates.ipynb              # Calculate mutation rates
-│   ├── analyze_genome_wide_rates.ipynb  # Visualize and analyze rates
-│   └── summarize_filter_logs.ipynb      # Summarize mutation filter statistics from log files
+│   ├── compute_rates.ipynb                    # Calculate mutation rates
+│   ├── analyze_genome_wide_rates.ipynb        # Visualize and analyze rates
+│   ├── analyze_site_specific_rates.ipynb      # Site-specific rate analysis with SHAPE-MaP
+│   ├── compute_fitness_effects.ipynb          # Compute per-mutation fitness effects
+│   ├── process_shapemap_data.ipynb            # Process SHAPE-MaP reactivity data
+│   ├── process_dms_data_yu_ha.ipynb           # Process Yu et al. HA DMS data
+│   ├── process_dms_data_bloom_np.ipynb        # Process Bloom et al. NP DMS data
+│   ├── process_dms_data_soh_pb2.ipynb         # Process Soh et al. PB2 DMS data
+│   ├── process_dms_data_wang_na.ipynb         # Process Wang et al. NA DMS data
+│   ├── process_dms_data_li_pb1.ipynb          # Process Li et al. PB1 DMS data
+│   ├── process_dms_data_hom_m1.ipynb          # Process Hom et al. M1 DMS data
+│   ├── process_dms_data_teo_nep.ipynb         # Process Teo et al. NEP DMS data
+│   ├── analyze_fitness_effects.ipynb          # Compare fitness effects to DMS data
+│   └── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── HA/
@@ -180,7 +191,14 @@ Outputs three CSV files at the results root:
 - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
 - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
 
-### Step 9: Process DMS Data
+### Step 9: Process SHAPE-MaP Data
+
+Processes SHAPE-MaP RNA secondary structure reactivity data from Dadonaite et al. 2019:
+1. Reads per-nucleotide SHAPE reactivity values from the source Excel file
+2. Aligns each segment's reactivity profile to the pipeline reference sequences using MUSCLE
+3. Outputs `results/shapemap/all_data.csv` — SHAPE reactivities mapped to reference site coordinates for all segments (HA and NA excluded)
+
+### Step 10: Process DMS Data
 
 Processes raw deep mutational scanning (DMS) data from external sources into standardized formats for comparison with fitness effects. Each experiment is handled by a separate notebook:
 
@@ -196,19 +214,44 @@ Processes raw deep mutational scanning (DMS) data from external sources into sta
 
 **`process_dms_data_soh_pb2.ipynb`** (Soh et al., PB2):
 1. Aligns the DMS sequence to the PB2 reference using MUSCLE
-2. Verifies the alignment has no gaps and reports percent identity (QC only; raw data is used directly by Step 10)
+2. Verifies the alignment has no gaps and reports percent identity (QC only; raw data is used directly by Step 11)
 
 **`process_dms_data_wang_na.ipynb`** (Wang et al., NA):
-1. Reads NA DMS data and compares the DMS sequence to the N1 tree reference (sequence comparison / exploration)
+1. Aligns the DMS NA sequence to the N1 tree reference using MUSCLE to establish site numbering correspondence
+2. Merges fitness measurements with the numbering map
+3. Outputs `results/dms_data/Wang_NA/processed_dms_data.csv` — NA DMS data with tree reference site numbering
 
-### Step 10: Analyze Fitness Effects
+**`process_dms_data_li_pb1.ipynb`** (Li et al., PB1):
+1. Aligns the DMS PB1 sequence to the tree reference using MUSCLE to establish site numbering correspondence
+2. Merges fitness measurements with the numbering map
+3. Outputs `results/dms_data/Li_PB1/processed_dms_data.csv` — PB1 DMS data with tree reference site numbering
+
+**`process_dms_data_hom_m1.ipynb`** (Hom et al., M1):
+1. Aligns the DMS M1 sequence to the tree reference using MUSCLE to establish site numbering correspondence
+2. Converts amino acid preferences to log-ratio fitness effects
+3. Outputs `results/dms_data/Hom_M1/processed_dms_data.csv` — M1 DMS data with tree reference site numbering
+
+**`process_dms_data_teo_nep.ipynb`** (Teo et al., NEP):
+1. Reconstructs the NEP reference protein from the NS segment reference by concatenating exon 1 (nt 1–30) and exon 2 (nt 503–838)
+2. Aligns the DMS NEP sequence (PR8 strain) to the reference using MUSCLE; uses actual DMS site numbers for coordinate mapping to handle non-consecutive site numbering
+3. Outputs `results/dms_data/Teo_NEP/processed_dms_data.csv` — NEP DMS data with tree reference site numbering
+
+### Step 11: Analyze Site-Specific Rates
+
+Executes an analysis notebook that:
+1. Visualizes per-site synonymous mutation rates across the genome
+2. Examines the relationship between local sequence context (motif) and site-specific rates
+3. Compares model performance (base, local context, full context) across segments
+4. Integrates SHAPE-MaP RNA structure data to examine the relationship between secondary structure and mutation rates
+
+### Step 12: Analyze Fitness Effects
 
 Executes an analysis notebook that:
 1. Plots distributions of fitness effects by mutation class across all genes
 2. Examines synonymous fitness effects across genome sites
-3. Compares evolutionary fitness effects to experimentally measured DMS effects for HA (Yu et al.), NP (Bloom et al.), and PB2 (Soh et al.)
+3. Compares evolutionary fitness effects to experimentally measured DMS effects for seven proteins: HA/H3 (Yu et al. 2025), NP (Bloom et al. 2014), M1 (Hom et al. 2019), NEP (Teo et al. 2024), PB1 (Li et al. 2023), PB2 (Soh et al. 2019), and NA/N1 (Wang et al. 2023)
 
-### Step 11: Summarize Mutation Filter Logs
+### Step 13: Summarize Mutation Filter Logs
 
 Executes a diagnostic notebook that parses the log files produced by the mutation-counting rules and consolidates filter statistics across all trees. For each tree (global and host-specific), the notebook reports:
 - Total nodes and internal nodes
@@ -395,11 +438,17 @@ Located in the `results/` root directory:
        - `expected_count` — total expected mutations under the neutral model
        - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
 
-9. **Processed DMS Data**: `results/dms_data/`
-   - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al.) with tree reference site numbering
-   - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al.) with log-ratio fitness effects
+9. **SHAPE-MaP Data**: `results/shapemap/`
+   - `all_data.csv` - SHAPE-MaP RNA structure reactivities (Dadonaite et al. 2019) mapped to reference site coordinates for internal segments
+
+10. **Processed DMS Data**: `results/dms_data/`
+   - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al. 2025) with tree reference site numbering
+   - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al. 2014) with log-ratio fitness effects
    - `.process_dms_data_soh_pb2.done` - Sentinel file marking completion of Soh et al. PB2 alignment QC
-   - `.process_dms_data_wang_na.done` - Sentinel file marking completion of Wang et al. NA sequence comparison
+   - `Wang_NA/processed_dms_data.csv` - NA DMS fitness effects (Wang et al. 2023) with tree reference site numbering
+   - `Li_PB1/processed_dms_data.csv` - PB1 DMS fitness effects (Li et al. 2023) with tree reference site numbering
+   - `Hom_M1/processed_dms_data.csv` - M1 DMS fitness effects (Hom et al. 2019) with tree reference site numbering
+   - `Teo_NEP/processed_dms_data.csv` - NEP DMS fitness effects (Teo et al. 2024) with tree reference site numbering
 
 ### Output Structure Example
 
@@ -431,13 +480,22 @@ results/
 ├── actual_expected.csv
 ├── sitewise_synonymous_fitness_effects.csv
 ├── aa_fitness_effects.csv
+├── shapemap/
+│   └── all_data.csv
 ├── dms_data/
 │   ├── Yu_HA/
 │   │   └── processed_dms_data.csv
-│   └── Bloom_NP/
+│   ├── Bloom_NP/
+│   │   └── processed_dms_data.csv
+│   ├── Wang_NA/
+│   │   └── processed_dms_data.csv
+│   ├── Li_PB1/
+│   │   └── processed_dms_data.csv
+│   ├── Hom_M1/
+│   │   └── processed_dms_data.csv
+│   └── Teo_NEP/
 │       └── processed_dms_data.csv
 ├── .process_dms_data_soh_pb2.done
-├── .process_dms_data_wang_na.done
 ├── .summarize_filter_logs.done
 └── neutral_model/
     ├── base/
