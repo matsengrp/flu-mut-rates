@@ -27,7 +27,7 @@ flu-syn-rates/
 │   ├── process_shapemap_data.ipynb            # Process SHAPE-MaP reactivity data
 │   ├── process_dms_data_yu_ha.ipynb           # Process Yu et al. HA DMS data
 │   ├── process_dms_data_bloom_np.ipynb        # Process Bloom et al. NP DMS data
-│   ├── process_dms_data_soh_pb2.ipynb         # Process Soh et al. PB2 DMS data (QC)
+│   ├── process_dms_data_soh_pb2.ipynb         # Process Soh et al. PB2 DMS data
 │   ├── process_dms_data_wang_na.ipynb         # Process Wang et al. NA DMS data
 │   ├── process_dms_data_li_pb1.ipynb          # Process Li et al. PB1 DMS data
 │   ├── process_dms_data_hom_m1.ipynb          # Process Hom et al. M1 DMS data
