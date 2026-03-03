@@ -112,7 +112,9 @@ final_outputs.extend([
     f"{config['output_dir']}/dms_data/Yu_HA/processed_dms_data.csv",
     f"{config['output_dir']}/dms_data/Bloom_NP/processed_dms_data.csv",
     f"{config['output_dir']}/.process_dms_data_soh_pb2.done",
-    f"{config['output_dir']}/.process_dms_data_wang_na.done",
+    f"{config['output_dir']}/dms_data/Wang_NA/processed_dms_data.csv",
+    f"{config['output_dir']}/dms_data/Li_PB1/processed_dms_data.csv",
+    f"{config['output_dir']}/dms_data/Hom_M1/processed_dms_data.csv",
 ])
 
 # Add analyze_fitness_effects to final targets
@@ -396,7 +398,7 @@ rule process_dms_data_wang_na:
         notebook="notebooks/process_dms_data_wang_na.ipynb",
         na_data="data/dms_data/Wang_NA/msystems.00670-23-s0006.xlsx"
     output:
-        touch("{output_dir}/.process_dms_data_wang_na.done")
+        na_dms="{output_dir}/dms_data/Wang_NA/processed_dms_data.csv"
     log:
         "logs/process_dms_data_wang_na.log"
     shell:
@@ -410,6 +412,47 @@ rule process_dms_data_wang_na:
             process_dms_data_wang_na.ipynb &> ../{log}
         """
 
+# Process PB1 DMS data from Li et al.
+rule process_dms_data_li_pb1:
+    input:
+        notebook="notebooks/process_dms_data_li_pb1.ipynb",
+        pb1_data="data/dms_data/Li_PB1/jvi.01329-23-s0008.csv"
+    output:
+        pb1_dms="{output_dir}/dms_data/Li_PB1/processed_dms_data.csv"
+    log:
+        "logs/process_dms_data_li_pb1.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_li_pb1.ipynb &> ../{log}
+        """
+
+# Process M1 DMS data from Hom et al.
+rule process_dms_data_hom_m1:
+    input:
+        notebook="notebooks/process_dms_data_hom_m1.ipynb",
+        prefs="data/dms_data/Hom_M1/summary_avgprefs.csv",
+        fasta="data/dms_data/Hom_M1/PR8-M1.fasta"
+    output:
+        m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv"
+    log:
+        "logs/process_dms_data_hom_m1.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_hom_m1.ipynb &> ../{log}
+        """
+
 # Analyze fitness effects and compare to DMS data
 rule analyze_fitness_effects:
     input:
@@ -418,7 +461,10 @@ rule analyze_fitness_effects:
         syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
         ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv",
         np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv",
-        pb2_dms="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv"
+        pb2_dms="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv",
+        na_dms="{output_dir}/dms_data/Wang_NA/processed_dms_data.csv",
+        pb1_dms="{output_dir}/dms_data/Li_PB1/processed_dms_data.csv",
+        m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv"
     output:
         touch("{output_dir}/.analyze_fitness_effects.done")
     log:
