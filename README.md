@@ -36,6 +36,7 @@ flu-syn-rates/
 │   └── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
+│   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)
 │   ├── HA/
 │   │   ├── H1/
 │   │   │   ├── curated_root.fasta
