@@ -178,14 +178,10 @@ def _(
         _count_mask = (_df["expected_count"] >= _min_exp) & (_df["actual_count"] >= _min_act)
     _df = _df[_count_mask]
 
-    # Reference filter: only show mutations away from the reference sequence amino acid
-    # (skipped for synonymous mutations since wt_aa == mut_aa by definition)
+    # Reference filter: only show mutations where wt_aa matches the reference
+    # sequence amino acid (applied to all mutation classes)
     if reference_aa:
-        _ref_mask = (
-            (_df["mut_class"] == "synonymous") |
-            (_df["codon_site"].map(reference_aa) == _df["wt_aa"])
-        )
-        _df = _df[_ref_mask]
+        _df = _df[_df["codon_site"].map(reference_aa) == _df["wt_aa"]]
 
     plot_data = _df.copy()
     return (plot_data,)
