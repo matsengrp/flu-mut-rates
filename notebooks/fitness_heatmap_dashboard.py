@@ -22,10 +22,10 @@ def _(pd):
     # Load and preprocess fitness effects data (computed once at startup)
     _raw = pd.read_csv("../results/aa_fitness_effects.csv", keep_default_na=False)
 
-    # Keep only host=="all" nonsynonymous mutations; drop PB1-F2 fusions
+    # Keep only host=="all" mutations (all classes); drop PB1-F2 fusions
     _df = _raw[
         (_raw["host"] == "all") &
-        (_raw["mut_class"] == "nonsynonymous") &
+        (_raw["mut_class"].isin(["nonsynonymous", "synonymous", "nonsense"])) &
         (~_raw["gene"].str.contains("PB1-F2"))
     ].copy()
 
@@ -37,8 +37,13 @@ def _(pd):
         _df[_col] = _df[_col].str.split(";")
     _df = _df.explode(["gene", "codon_site", "wt_aa", "mut_aa"])
 
-    # After explosion, drop rows where the mutation is synonymous in this gene
-    _df = _df[_df["wt_aa"] != _df["mut_aa"]].copy()
+    # After explosion, drop rows that are spuriously synonymous in this gene
+    # (e.g. a nonsynonymous/nonsense mutation that happens to be synonymous in
+    # the other overlapping ORF).  True synonymous mutations (mut_class ==
+    # "synonymous") always have wt_aa == mut_aa, so we keep those.
+    _df = _df[
+        (_df["mut_class"] == "synonymous") | (_df["wt_aa"] != _df["mut_aa"])
+    ].copy()
     _df["codon_site"] = _df["codon_site"].astype(int)
 
     preprocessed_df = _df.reset_index(drop=True)
@@ -174,8 +179,12 @@ def _(
     _df = _df[_count_mask]
 
     # Reference filter: only show mutations away from the reference sequence amino acid
+    # (skipped for synonymous mutations since wt_aa == mut_aa by definition)
     if reference_aa:
-        _ref_mask = _df["codon_site"].map(reference_aa) == _df["wt_aa"]
+        _ref_mask = (
+            (_df["mut_class"] == "synonymous") |
+            (_df["codon_site"].map(reference_aa) == _df["wt_aa"])
+        )
         _df = _df[_ref_mask]
 
     plot_data = _df.copy()
@@ -184,7 +193,15 @@ def _(
 
 @app.cell
 def _(alt, np, plot_data):
-    AA_ORDER = list("ACDEFGHIKLMNPQRSTVWY*")
+    AA_ORDER = [
+        "K", "R", "H",             # positively charged
+        "D", "E",                  # negatively charged
+        "N", "Q", "S", "T",        # polar uncharged
+        "P", "G", "A", "V", "L", "I", "M",  # nonpolar aliphatic
+        "F", "W", "Y",             # aromatic
+        "C",                       # cysteine
+        "*",                       # stop
+    ]
 
     color_scale = alt.Scale(
         scheme="redblue",
@@ -210,9 +227,10 @@ def _(alt, np, plot_data):
         .properties(width=900, height=20, title="Drag to zoom")
     )
 
-    # --- Panel 2: site-level line plot (mean fitness per site) ---
+    # --- Panel 2: site-level line plot (mean nonsynonymous fitness per site) ---
     _site_agg = (
-        plot_data.groupby("codon_site", as_index=False)["delta_fitness"]
+        plot_data[plot_data["mut_class"] == "nonsynonymous"]
+        .groupby("codon_site", as_index=False)["delta_fitness"]
         .mean()
         .rename(columns={"delta_fitness": "mean_fitness"})
     )
@@ -222,11 +240,11 @@ def _(alt, np, plot_data):
         .transform_filter(site_brush)
         .encode(
             x=alt.X("codon_site:Q", title="Site"),
-            y=alt.Y("mean_fitness:Q", title="Mean fitness effect",
+            y=alt.Y("mean_fitness:Q", title="Mean nonsynonymous fitness effect",
                     scale=alt.Scale(zero=False)),
             tooltip=[
                 alt.Tooltip("codon_site:Q", title="Site"),
-                alt.Tooltip("mean_fitness:Q", title="Mean fitness effect", format=".3f"),
+                alt.Tooltip("mean_fitness:Q", title="Mean nonsynonymous fitness effect", format=".3f"),
             ],
         )
         .properties(width=900, height=130)
@@ -253,7 +271,10 @@ def _(alt, np, plot_data):
         .encode(
             x=alt.X("codon_site:O", title="Site",
                     axis=alt.Axis(labelOverlap=True, labelAngle=0)),
-            y=alt.Y("mut_aa:N", sort=AA_ORDER, title="Mutant AA"),
+            y=alt.Y("mut_aa:N", title="Mutant AA",
+                    scale=alt.Scale(domain=AA_ORDER),
+                    axis=alt.Axis(grid=True, tickBand="extent",
+                                  gridColor="#333333", gridWidth=2)),
             color=alt.Color("delta_fitness:Q", scale=color_scale, title="Fitness effect"),
             tooltip=[
                 alt.Tooltip("codon_site:O", title="Site"),
@@ -274,11 +295,11 @@ def _(alt, np, plot_data):
         .transform_filter(site_brush)
         .encode(
             x=alt.X("codon_site:O", axis=alt.Axis(labelOverlap=True, labelAngle=0)),
-            y=alt.Y("wt_aa:N", sort=AA_ORDER),
+            y=alt.Y("wt_aa:N", scale=alt.Scale(domain=AA_ORDER)),
         )
     )
 
-    heatmap = (background + heatmap_rects + wt_marks).properties(width=900, height=320)
+    heatmap = (background + heatmap_rects + wt_marks).properties(width=alt.Step(16), height=320)
 
     # --- Final composition ---
     chart = (
