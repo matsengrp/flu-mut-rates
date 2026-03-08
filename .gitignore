@@ -1,4 +1,5 @@
 results*/
+logs*/
 data/
 .snakemake/
 scripts/__pycache__
