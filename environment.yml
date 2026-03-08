@@ -1,4 +1,4 @@
-name: flu-syn-rates
+name: flu-mut-rates
 
 channels:
   - https://prefix.dev/conda-forge
@@ -6,22 +6,22 @@ channels:
   - nodefaults
 
 dependencies:
+  - snakemake
   - numpy
   - matplotlib
-  - notebook
-  - ipywidgets
-  - snakemake
-  - git-lfs
   - pandas
   - seaborn
   - scipy
   - statsmodels
+  - scikit-learn
   - bte
   - biopython
   - muscle
   - gffutils
-  - scikit-learn
+  - notebook
+  - ipywidgets
   - papermill
   - nbconvert
   - marimo
   - altair
+  - gh

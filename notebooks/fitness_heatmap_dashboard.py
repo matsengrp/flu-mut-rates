@@ -52,8 +52,11 @@ def _(pd):
 
 @app.cell
 def _():
+    import yaml
+    with open("../config.yaml") as _f:
+        _config = yaml.safe_load(_f)
     # TODO: Switch to results/{segment}/{subtype} once flu-usher pipeline is updated
-    FLU_USHER_RESULTS = "../../flu-usher/results_260226"
+    FLU_USHER_RESULTS = _config["data_dir"]
 
     GENE_TO_SEGMENT = {
         "HA": "HA", "NA": "NA", "NP": "NP",
