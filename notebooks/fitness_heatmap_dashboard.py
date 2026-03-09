@@ -12,9 +12,13 @@ def _():
     import numpy as np
     import altair as alt
     alt.data_transformers.disable_max_rows()
-    # In WASM (Pyodide) the data files sit next to the HTML; locally they're one level up
-    _wasm = "pyodide" in sys.modules
-    DATA_DIR = "results" if _wasm else "../results"
+    # In WASM (Pyodide) fetch files over HTTP relative to the page URL;
+    # locally they're one level up from the notebooks/ directory
+    if "pyodide" in sys.modules:
+        import js
+        DATA_DIR = js.document.baseURI.rstrip("/") + "/results"
+    else:
+        DATA_DIR = "../results"
     return DATA_DIR, alt, mo, np, pd, sys
 
 
@@ -32,9 +36,15 @@ def _(DATA_DIR, pd):
 @app.cell
 def _(DATA_DIR):
     import json
-    with open(f"{DATA_DIR}/reference_aa.json") as _f:
-        # Keys are "GENE:SUBTYPE"; codon sites are string keys -> convert to int
-        _raw = json.load(_f)
+    import urllib.request
+    _url = f"{DATA_DIR}/reference_aa.json"
+    if _url.startswith("http"):
+        with urllib.request.urlopen(_url) as _f:
+            _raw = json.load(_f)
+    else:
+        with open(_url) as _f:
+            # Keys are "GENE:SUBTYPE"; codon sites are string keys -> convert to int
+            _raw = json.load(_f)
     reference_aa_table = {
         key: {int(k): v for k, v in sites.items()}
         for key, sites in _raw.items()
