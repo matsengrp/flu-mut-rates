@@ -163,7 +163,7 @@ def _(alt, plot_data):
     _sites_df = plot_data[["codon_site"]].drop_duplicates().sort_values("codon_site")
     site_zoom_bar = (
         alt.Chart(_sites_df)
-        .mark_rect(color="steelblue", opacity=0.6)
+        .mark_rect(color="#BB86FC", opacity=0.6)
         .encode(x=alt.X("codon_site:Q", title=None, axis=None, scale=alt.Scale(zero=False, nice=False)))
         .add_params(site_brush)
         .properties(width=900, height=20, title="Drag to zoom")
@@ -178,7 +178,7 @@ def _(alt, plot_data):
     )
     lineplot = (
         alt.Chart(_site_agg)
-        .mark_line(point=True, opacity=0.8)
+        .mark_line(point=alt.OverlayMarkDef(color="#BB86FC", filled=True), opacity=0.9, color="#BB86FC")
         .transform_filter(site_brush)
         .encode(
             x=alt.X("codon_site:Q", title="Site", scale=alt.Scale(zero=False, nice=False)),
@@ -231,7 +231,7 @@ def _(alt, plot_data):
     _wt_df = plot_data[["codon_site", "wt_aa"]].drop_duplicates()
     wt_marks = (
         alt.Chart(_wt_df)
-        .mark_text(text="x", color="black", fontSize=7)
+        .mark_text(text="x", color="black", fontSize=10)
         .transform_filter(site_brush)
         .encode(
             x=alt.X("codon_site:O", axis=alt.Axis(labelOverlap=True, labelAngle=0)),
