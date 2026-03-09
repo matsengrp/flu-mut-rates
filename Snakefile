@@ -590,6 +590,7 @@ rule export_dashboard:
     shell:
         """
         marimo export html-wasm {input.notebook} -o docs/ --mode run -f &> {log}
+        sed -i 's/"theme": "light"/"theme": "dark"/g' docs/index.html
         mkdir -p docs/results
         cp {input.aa_fitness} docs/results/
         cp {input.reference_aa} docs/results/
