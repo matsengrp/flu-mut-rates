@@ -124,8 +124,10 @@ final_outputs.append(f"{config['output_dir']}/.analyze_fitness_effects.done")
 # Add summarize_filter_logs notebook to final targets
 final_outputs.append(f"{config['output_dir']}/.summarize_filter_logs.done")
 
-# Add dashboard export to final targets
+# Add dashboard exports to final targets
 final_outputs.append("docs/index.html")
+final_outputs.append("docs/aa/index.html")
+final_outputs.append("docs/nt/index.html")
 
 # Main rule to define target outputs
 rule all:
@@ -577,23 +579,90 @@ rule precompute_reference_aa:
         python {input.script} &> {log}
         """
 
-# Export the fitness heatmap dashboard as a WASM HTML file for GitHub Pages
+# Pre-compute reference nucleotide sequences for all segment/subtype combinations
+rule precompute_reference_nt:
+    input:
+        script="scripts/precompute_reference_nt.py"
+    output:
+        "{output_dir}/reference_nt.json"
+    log:
+        "{output_dir}/logs/precompute_reference_nt.log"
+    shell:
+        """
+        python {input.script} &> {log}
+        """
+
+# Landing page linking to both dashboards
+rule create_landing_page:
+    output:
+        "docs/index.html"
+    shell:
+        """
+        cat > docs/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flu Fitness Dashboards</title>
+  <style>
+    body {{ font-family: sans-serif; background: #121212; color: #e0e0e0;
+           display: flex; flex-direction: column; align-items: center;
+           justify-content: center; height: 100vh; margin: 0; }}
+    h1 {{ margin-bottom: 2rem; }}
+    .links {{ display: flex; gap: 2rem; }}
+    a {{ display: block; padding: 1rem 2rem; background: #1e1e1e;
+         border: 1px solid #BB86FC; border-radius: 8px; color: #BB86FC;
+         text-decoration: none; font-size: 1.2rem; text-align: center; }}
+    a:hover {{ background: #2a2a2a; }}
+  </style>
+</head>
+<body>
+  <h1>Flu Fitness Dashboards</h1>
+  <div class="links">
+    <a href="aa/">Amino acid mutations</a>
+    <a href="nt/">Nucleotide mutations</a>
+  </div>
+</body>
+</html>
+EOF
+        """
+
+# Export the AA fitness heatmap dashboard as a WASM HTML file for GitHub Pages
 rule export_dashboard:
     input:
         notebook="notebooks/fitness_heatmap_dashboard.py",
         aa_fitness=f"{config['output_dir']}/aa_fitness_effects.csv",
         reference_aa=f"{config['output_dir']}/reference_aa.json"
     output:
-        "docs/index.html"
+        "docs/aa/index.html"
     log:
         f"{config['output_dir']}/logs/export_dashboard.log"
     shell:
         """
-        marimo export html-wasm {input.notebook} -o docs/ --mode run -f &> {log}
-        sed -i 's/"theme": "light"/"theme": "dark"/g' docs/index.html
-        mkdir -p docs/results
-        cp {input.aa_fitness} docs/results/
-        cp {input.reference_aa} docs/results/
+        marimo export html-wasm {input.notebook} -o docs/aa/ --mode run -f &> {log}
+        sed -i 's/"theme": "light"/"theme": "dark"/g' docs/aa/index.html
+        mkdir -p docs/aa/results
+        cp {input.aa_fitness} docs/aa/results/
+        cp {input.reference_aa} docs/aa/results/
+        """
+
+rule export_nt_dashboard:
+    input:
+        notebook="notebooks/nt_fitness_heatmap_dashboard.py",
+        nt_fitness=f"{config['output_dir']}/nt_fitness_effects.csv",
+        reference_nt=f"{config['output_dir']}/reference_nt.json",
+    output:
+        "docs/nt/index.html"
+    log:
+        f"{config['output_dir']}/logs/export_nt_dashboard.log"
+    shell:
+        """
+        marimo export html-wasm {input.notebook} -o docs/nt/ --mode run -f &> {log}
+        sed -i 's/"theme": "light"/"theme": "dark"/g' docs/nt/index.html
+        mkdir -p docs/nt/results
+        cp {input.nt_fitness} docs/nt/results/
+        cp {input.reference_nt} docs/nt/results/
         """
 
 # Summarize mutation filter statistics across all trees from log files
