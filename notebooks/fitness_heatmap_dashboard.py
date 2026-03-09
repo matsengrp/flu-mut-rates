@@ -7,11 +7,14 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     import sys
+    import warnings
     import marimo as mo
     import pandas as pd
     import numpy as np
     import altair as alt
     alt.data_transformers.disable_max_rows()
+    # Suppress narwhals/altair compatibility warning (marimo wraps DataFrames in narwhals)
+    warnings.filterwarnings("ignore", message="You passed a.*narwhals")
     # In WASM (Pyodide) fetch files over HTTP relative to the page URL;
     # locally they're one level up from the notebooks/ directory
     if "pyodide" in sys.modules:
