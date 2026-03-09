@@ -124,6 +124,9 @@ final_outputs.append(f"{config['output_dir']}/.analyze_fitness_effects.done")
 # Add summarize_filter_logs notebook to final targets
 final_outputs.append(f"{config['output_dir']}/.summarize_filter_logs.done")
 
+# Add dashboard export to final targets
+final_outputs.append("docs/index.html")
+
 # Main rule to define target outputs
 rule all:
     input:
@@ -559,6 +562,37 @@ rule align_proteins:
             --segment {wildcards.segment} \
             --subtypes {params.subtypes} \
             --muscle_path muscle &> {log}
+        """
+
+# Pre-compute reference amino acid sequences for all gene/subtype combinations
+rule precompute_reference_aa:
+    input:
+        script="scripts/precompute_reference_aa.py"
+    output:
+        "{output_dir}/reference_aa.json"
+    log:
+        "{output_dir}/logs/precompute_reference_aa.log"
+    shell:
+        """
+        python {input.script} &> {log}
+        """
+
+# Export the fitness heatmap dashboard as a WASM HTML file for GitHub Pages
+rule export_dashboard:
+    input:
+        notebook="notebooks/fitness_heatmap_dashboard.py",
+        aa_fitness=f"{config['output_dir']}/aa_fitness_effects.csv",
+        reference_aa=f"{config['output_dir']}/reference_aa.json"
+    output:
+        "docs/index.html"
+    log:
+        f"{config['output_dir']}/logs/export_dashboard.log"
+    shell:
+        """
+        marimo export html-wasm {input.notebook} -o docs/ --mode run -f &> {log}
+        mkdir -p docs/results
+        cp {input.aa_fitness} docs/results/
+        cp {input.reference_aa} docs/results/
         """
 
 # Summarize mutation filter statistics across all trees from log files
