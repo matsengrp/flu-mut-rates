@@ -16,7 +16,11 @@ def _():
     # locally they're one level up from the notebooks/ directory
     if "pyodide" in sys.modules:
         import js
-        DATA_DIR = js.document.baseURI.rstrip("/") + "/results"
+        # Pyodide runs in a Web Worker; js.location.href is the worker script URL
+        # (e.g. https://host/path/assets/worker.js). Strip from /assets/ onward
+        # to recover the page base URL.
+        _base = str(js.location.href).rsplit("/assets/", 1)[0]
+        DATA_DIR = _base.rstrip("/") + "/results"
     else:
         DATA_DIR = "../results"
     return DATA_DIR, alt, mo, np, pd, sys
