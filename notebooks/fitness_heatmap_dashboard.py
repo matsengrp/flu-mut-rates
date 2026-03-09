@@ -10,11 +10,8 @@ def _():
     import pandas as pd
     import numpy as np
     import altair as alt
-    import gffutils
-    from Bio import SeqIO
-    from Bio.Seq import Seq
     alt.data_transformers.disable_max_rows()
-    return Seq, SeqIO, alt, gffutils, mo, np, pd
+    return alt, mo, np, pd
 
 
 @app.cell
@@ -30,56 +27,15 @@ def _(pd):
 
 @app.cell
 def _():
-    import yaml
-    with open("../config.yaml") as _f:
-        _config = yaml.safe_load(_f)
-    FLU_USHER_RESULTS = _config["data_dir"]
-
-    GENE_TO_SEGMENT = {
-        "HA": "HA", "NA": "NA", "NP": "NP",
-        "PA": "PA", "PB1": "PB1", "PB2": "PB2",
-        "M1": "MP", "M2": "MP",
-        "NS1": "NS", "NEP": "NS",
+    import json
+    with open("../results/reference_aa.json") as _f:
+        # Keys are "GENE:SUBTYPE"; codon sites are string keys -> convert to int
+        _raw = json.load(_f)
+    reference_aa_table = {
+        key: {int(k): v for k, v in sites.items()}
+        for key, sites in _raw.items()
     }
-    return FLU_USHER_RESULTS, GENE_TO_SEGMENT
-
-
-@app.cell
-def _(FLU_USHER_RESULTS, Seq, SeqIO, gffutils):
-    def load_reference_aa(segment, subtype, gene):
-        """Return dict {codon_site (int): amino_acid (str)} for the given gene.
-
-        Uses the same CDS concatenation logic as make_coding_sites.py:
-        CDS features are sorted by start position, concatenated in order, then
-        translated. codon_site is 1-indexed into the resulting protein.
-        """
-        base = f"../{FLU_USHER_RESULTS}/{segment}/{subtype}"
-        db = gffutils.create_db(
-            f"{base}/curated_reference.gff",
-            ":memory:",
-            force=True,
-            merge_strategy="create_unique",
-        )
-        ref_seq = str(next(SeqIO.parse(f"{base}/curated_reference.fasta", "fasta")).seq)
-
-        # Collect CDS exons for the requested gene
-        cdss = []
-        for cds in db.features_of_type("CDS"):
-            if cds.attributes.get("gene", [""])[0].upper() == gene.upper():
-                cdss.append((cds.start, cds.end))
-        cdss.sort()
-
-        if not cdss:
-            return {}
-
-        # Concatenate exon sequences and translate (trim to multiple of 3 if needed)
-        cds_nt = "".join(ref_seq[s - 1 : e] for s, e in cdss)
-        cds_nt = cds_nt[: len(cds_nt) - len(cds_nt) % 3]
-        protein = str(Seq(cds_nt).translate(to_stop=True))
-
-        return {i + 1: aa for i, aa in enumerate(protein)}
-
-    return (load_reference_aa,)
+    return json, reference_aa_table
 
 
 @app.cell
@@ -117,10 +73,9 @@ def _(mo):
 
 
 @app.cell
-def _(GENE_TO_SEGMENT, load_reference_aa, protein, subtype):
-    _segment = GENE_TO_SEGMENT.get(protein.value, protein.value)
+def _(protein, reference_aa_table, subtype):
     _ref_subtype = subtype.value if protein.value in ("HA", "NA") else "all"
-    reference_aa = load_reference_aa(_segment, _ref_subtype, protein.value)
+    reference_aa = reference_aa_table.get(f"{protein.value}:{_ref_subtype}", {})
     return (reference_aa,)
 
 
