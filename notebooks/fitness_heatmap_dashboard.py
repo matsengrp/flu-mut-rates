@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.20.4"
-app = marimo.App(width="full")
+app = marimo.App(width="full", theme="dark")
 
 
 @app.cell
@@ -26,7 +26,7 @@ def _():
         DATA_DIR = _base.rstrip("/") + "/results"
     else:
         DATA_DIR = "../results"
-    return DATA_DIR, alt, mo, np, pd, sys
+    return DATA_DIR, alt, mo, np, pd
 
 
 @app.cell
@@ -63,7 +63,7 @@ def _(DATA_DIR):
         key: {int(k): v for k, v in sites.items()}
         for key, sites in _raw.items()
     }
-    return json, reference_aa_table
+    return (reference_aa_table,)
 
 
 @app.cell
