@@ -19,35 +19,13 @@ def _():
 
 @app.cell
 def _(pd):
-    # Load and preprocess fitness effects data (computed once at startup)
-    _raw = pd.read_csv("../results/aa_fitness_effects.csv", keep_default_na=False)
-
-    # Keep only host=="all" mutations (all classes); drop PB1-F2 fusions
-    _df = _raw[
-        (_raw["host"] == "all") &
-        (_raw["mut_class"].isin(["nonsynonymous", "synonymous", "nonsense"])) &
-        (~_raw["gene"].str.contains("PB1-F2"))
-    ].copy()
-
-    # Normalize gene to uppercase
-    _df["gene"] = _df["gene"].str.upper()
-
     # Explode overlapping-ORF rows (e.g. "NEP;NS1") on all four joined columns
+    df = pd.read_csv("../results/aa_fitness_effects.csv", keep_default_na=False)
     for _col in ["gene", "codon_site", "wt_aa", "mut_aa"]:
-        _df[_col] = _df[_col].str.split(";")
-    _df = _df.explode(["gene", "codon_site", "wt_aa", "mut_aa"])
-
-    # After explosion, drop rows that are spuriously synonymous in this gene
-    # (e.g. a nonsynonymous/nonsense mutation that happens to be synonymous in
-    # the other overlapping ORF).  True synonymous mutations (mut_class ==
-    # "synonymous") always have wt_aa == mut_aa, so we keep those.
-    _df = _df[
-        (_df["mut_class"] == "synonymous") | (_df["wt_aa"] != _df["mut_aa"])
-    ].copy()
-    _df["codon_site"] = _df["codon_site"].astype(int)
-
-    preprocessed_df = _df.reset_index(drop=True)
-    return (preprocessed_df,)
+        df[_col] = df[_col].str.split(";")
+    df = df.explode(["gene", "codon_site", "wt_aa", "mut_aa"])
+    df["codon_site"] = df["codon_site"].astype(int)
+    return (df,)
 
 
 @app.cell
@@ -55,7 +33,6 @@ def _():
     import yaml
     with open("../config.yaml") as _f:
         _config = yaml.safe_load(_f)
-    # TODO: Switch to results/{segment}/{subtype} once flu-usher pipeline is updated
     FLU_USHER_RESULTS = _config["data_dir"]
 
     GENE_TO_SEGMENT = {
@@ -76,7 +53,7 @@ def _(FLU_USHER_RESULTS, Seq, SeqIO, gffutils):
         CDS features are sorted by start position, concatenated in order, then
         translated. codon_site is 1-indexed into the resulting protein.
         """
-        base = f"{FLU_USHER_RESULTS}/{segment}/{subtype}"
+        base = f"../{FLU_USHER_RESULTS}/{segment}/{subtype}"
         db = gffutils.create_db(
             f"{base}/curated_reference.gff",
             ":memory:",
@@ -130,20 +107,13 @@ def _(HA_SUBTYPES, NA_SUBTYPES, mo, protein):
 
 @app.cell
 def _(mo):
-    min_expected_count = mo.ui.slider(
+    HOSTS = ["all", "human", "avian"]
+    host = mo.ui.dropdown(options=HOSTS, value="all", label="Host")
+    min_count = mo.ui.slider(
         start=0, stop=200, step=5, value=10,
-        label="Min expected count", show_value=True,
+        label="Min count (actual or expected)", show_value=True,
     )
-    min_actual_count = mo.ui.slider(
-        start=0, stop=200, step=5, value=0,
-        label="Min actual count", show_value=True,
-    )
-    count_filter_mode = mo.ui.radio(
-        options=["either (expected OR actual)", "both (expected AND actual)"],
-        value="either (expected OR actual)",
-        label="Count filter mode",
-    )
-    return count_filter_mode, min_actual_count, min_expected_count
+    return host, min_count
 
 
 @app.cell
@@ -155,16 +125,11 @@ def _(GENE_TO_SEGMENT, load_reference_aa, protein, subtype):
 
 
 @app.cell
-def _(
-    count_filter_mode,
-    min_actual_count,
-    min_expected_count,
-    preprocessed_df,
-    protein,
-    reference_aa,
-    subtype,
-):
-    _df = preprocessed_df[preprocessed_df["gene"] == protein.value].copy()
+def _(df, host, min_count, protein, reference_aa, subtype):
+    _df = df[df["gene"] == protein.value].copy()
+
+    # Host filter
+    _df = _df[_df["host"] == host.value]
 
     # Subtype filter
     if protein.value in ("HA", "NA"):
@@ -173,12 +138,7 @@ def _(
         _df = _df[_df["subtype"] == "all"]
 
     # Count filter
-    _min_exp = min_expected_count.value
-    _min_act = min_actual_count.value
-    if "OR" in count_filter_mode.value:
-        _count_mask = (_df["expected_count"] >= _min_exp) | (_df["actual_count"] >= _min_act)
-    else:
-        _count_mask = (_df["expected_count"] >= _min_exp) & (_df["actual_count"] >= _min_act)
+    _count_mask = (_df["expected_count"] >= min_count.value) | (_df["actual_count"] >= min_count.value)
     _df = _df[_count_mask]
 
     # Reference filter: only show mutations where wt_aa matches the reference
@@ -312,28 +272,19 @@ def _(alt, np, plot_data):
 
 
 @app.cell
-def _(
-    chart,
-    count_filter_mode,
-    min_actual_count,
-    min_expected_count,
-    mo,
-    plot_data,
-    protein,
-    subtype,
-):
+def _(chart, host, min_count, mo, plot_data, protein, subtype):
     _n_muts = len(plot_data)
     _n_sites = plot_data["codon_site"].nunique()
     summary = mo.md(f"**{_n_muts} mutations shown across {_n_sites} sites.**")
 
     if protein.value in ("HA", "NA"):
         controls = mo.hstack(
-            [protein, subtype, min_expected_count, min_actual_count, count_filter_mode],
+            [protein, subtype, host, min_count],
             gap=2,
         )
     else:
         controls = mo.hstack(
-            [protein, min_expected_count, min_actual_count, count_filter_mode],
+            [protein, host, min_count],
             gap=2,
         )
 
