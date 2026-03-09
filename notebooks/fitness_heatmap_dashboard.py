@@ -10,7 +10,7 @@ def _():
     import warnings
     import marimo as mo
     import pandas as pd
-    import numpy as np
+
     import altair as alt
     alt.data_transformers.disable_max_rows()
     # Suppress narwhals/altair compatibility warning (marimo wraps DataFrames in narwhals)
@@ -26,7 +26,7 @@ def _():
         DATA_DIR = _base.rstrip("/") + "/results"
     else:
         DATA_DIR = "../results"
-    return DATA_DIR, alt, mo, np, pd
+    return DATA_DIR, alt, mo, pd
 
 
 @app.cell
@@ -134,7 +134,7 @@ def _(df, host, min_count, protein, reference_aa, subtype):
 
 
 @app.cell
-def _(alt, np, plot_data):
+def _(alt, plot_data):
     AA_ORDER = [
         "K", "R", "H",             # positively charged
         "D", "E",                  # negatively charged
@@ -181,7 +181,7 @@ def _(alt, np, plot_data):
         .mark_line(point=True, opacity=0.8)
         .transform_filter(site_brush)
         .encode(
-            x=alt.X("codon_site:Q", title="Site"),
+            x=alt.X("codon_site:Q", title="Site", scale=alt.Scale(zero=False, nice=False)),
             y=alt.Y("mean_fitness:Q", title="Mean nonsynonymous fitness effect",
                     scale=alt.Scale(zero=False)),
             tooltip=[
@@ -203,11 +203,9 @@ def _(alt, np, plot_data):
                          axis=alt.Axis(labelOverlap=True, labelAngle=0)))
     )
 
-    # Colored rectangles — clip extreme fitness values for display
-    _heatmap_data = plot_data.copy()
-    _heatmap_data["delta_fitness"] = np.clip(_heatmap_data["delta_fitness"], -6, 2)
+    # Colored rectangles — color scale clamps display; actual values shown in tooltip
     heatmap_rects = (
-        alt.Chart(_heatmap_data)
+        alt.Chart(plot_data)
         .mark_rect()
         .transform_filter(site_brush)
         .encode(
