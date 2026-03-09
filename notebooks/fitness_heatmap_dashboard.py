@@ -164,7 +164,7 @@ def _(alt, plot_data):
     site_zoom_bar = (
         alt.Chart(_sites_df)
         .mark_rect(color="steelblue", opacity=0.6)
-        .encode(x=alt.X("codon_site:Q", title=None, axis=None))
+        .encode(x=alt.X("codon_site:Q", title=None, axis=None, scale=alt.Scale(zero=False, nice=False)))
         .add_params(site_brush)
         .properties(width=900, height=20, title="Drag to zoom")
     )
