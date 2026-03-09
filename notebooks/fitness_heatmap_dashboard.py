@@ -28,8 +28,15 @@ def _():
 
 @app.cell
 def _(DATA_DIR, pd):
+    import io, urllib.request as _urllib
     # Explode overlapping-ORF rows (e.g. "NEP;NS1") on all four joined columns
-    df = pd.read_csv(f"{DATA_DIR}/aa_fitness_effects.csv", keep_default_na=False)
+    # Read via urllib + StringIO to prevent pandas double-decompressing gzip responses
+    _url = f"{DATA_DIR}/aa_fitness_effects.csv"
+    if _url.startswith("http"):
+        with _urllib.urlopen(_url) as _r:
+            df = pd.read_csv(io.StringIO(_r.read().decode("utf-8")), keep_default_na=False)
+    else:
+        df = pd.read_csv(_url, keep_default_na=False)
     for _col in ["gene", "codon_site", "wt_aa", "mut_aa"]:
         df[_col] = df[_col].str.split(";")
     df = df.explode(["gene", "codon_site", "wt_aa", "mut_aa"])
