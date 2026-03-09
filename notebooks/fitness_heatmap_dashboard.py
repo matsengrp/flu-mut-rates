@@ -6,18 +6,22 @@ app = marimo.App(width="full")
 
 @app.cell
 def _():
+    import sys
     import marimo as mo
     import pandas as pd
     import numpy as np
     import altair as alt
     alt.data_transformers.disable_max_rows()
-    return alt, mo, np, pd
+    # In WASM (Pyodide) the data files sit next to the HTML; locally they're one level up
+    _wasm = "pyodide" in sys.modules
+    DATA_DIR = "results" if _wasm else "../results"
+    return DATA_DIR, alt, mo, np, pd, sys
 
 
 @app.cell
-def _(pd):
+def _(DATA_DIR, pd):
     # Explode overlapping-ORF rows (e.g. "NEP;NS1") on all four joined columns
-    df = pd.read_csv("../results/aa_fitness_effects.csv", keep_default_na=False)
+    df = pd.read_csv(f"{DATA_DIR}/aa_fitness_effects.csv", keep_default_na=False)
     for _col in ["gene", "codon_site", "wt_aa", "mut_aa"]:
         df[_col] = df[_col].str.split(";")
     df = df.explode(["gene", "codon_site", "wt_aa", "mut_aa"])
@@ -26,9 +30,9 @@ def _(pd):
 
 
 @app.cell
-def _():
+def _(DATA_DIR):
     import json
-    with open("../results/reference_aa.json") as _f:
+    with open(f"{DATA_DIR}/reference_aa.json") as _f:
         # Keys are "GENE:SUBTYPE"; codon sites are string keys -> convert to int
         _raw = json.load(_f)
     reference_aa_table = {
