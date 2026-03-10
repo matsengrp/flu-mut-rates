@@ -154,6 +154,7 @@ def _(alt, plot_data):
 
     # Brush on quantitative x so numeric interval selection works correctly
     site_brush = alt.selection_interval(
+        name="site_brush",
         encodings=["x"],
         mark=alt.BrushConfig(stroke="black", strokeWidth=2),
     )
