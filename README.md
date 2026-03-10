@@ -510,6 +510,25 @@ results/
         └── model_performance.csv
 ```
 
+## Interactive Dashboards
+
+Two interactive fitness effect dashboards are hosted via GitHub Pages under `docs/` and exported using [marimo](https://marimo.io/) in WASM mode:
+
+- **AA dashboard** (`docs/aa/index.html`): per-amino-acid-mutation fitness effects (`notebooks/fitness_heatmap_dashboard.py`)
+- **NT dashboard** (`docs/nt/index.html`): per-nucleotide-mutation fitness effects (`notebooks/nt_fitness_heatmap_dashboard.py`)
+
+To regenerate the HTML exports after modifying a dashboard notebook, run the corresponding Snakemake rule:
+
+```bash
+# Regenerate the NT dashboard
+snakemake --cores 1 docs/nt/index.html --forcerun export_nt_dashboard
+
+# Regenerate the AA dashboard
+snakemake --cores 1 docs/aa/index.html --forcerun export_dashboard
+```
+
+Each rule exports the notebook as a self-contained WASM app, patches the theme to dark, and copies the required result files into the `docs/{aa,nt}/results/` directory so they are accessible to the app at runtime.
+
 ## Requirements
 
 ### Software Dependencies
