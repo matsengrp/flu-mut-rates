@@ -48,21 +48,19 @@ def _(DATA_DIR, pd):
 def _(mo):
     HA_SUBTYPES = ["H1", "H3", "H5", "H7", "H9"]
     NA_SUBTYPES = ["N1", "N2", "N6", "N8", "N9"]
-    PROTEINS = ["HA", "NA", "NP", "PA", "PB1", "PB2", "M1", "M2", "NS1", "NEP"]
-
-    protein = mo.ui.dropdown(options=PROTEINS, value="HA", label="Protein")
-    return HA_SUBTYPES, NA_SUBTYPES, protein
+    SEGMENTS = ["HA", "NA", "NP", "PA", "PB1", "PB2", "MP", "NS"]
+    segment = mo.ui.dropdown(options=SEGMENTS, value="HA", label="Segment")
+    return HA_SUBTYPES, NA_SUBTYPES, segment
 
 
 @app.cell
-def _(HA_SUBTYPES, NA_SUBTYPES, mo, protein):
-    if protein.value == "HA":
+def _(HA_SUBTYPES, NA_SUBTYPES, mo, segment):
+    if segment.value == "HA":
         _opts, _default = HA_SUBTYPES, "H1"
-    elif protein.value == "NA":
+    elif segment.value == "NA":
         _opts, _default = NA_SUBTYPES, "N1"
     else:
         _opts, _default = ["all"], "all"
-
     subtype = mo.ui.dropdown(options=_opts, value=_default, label="Subtype")
     return (subtype,)
 
@@ -72,7 +70,7 @@ def _(mo):
     HOSTS = ["all", "human", "avian"]
     host = mo.ui.dropdown(options=HOSTS, value="all", label="Host")
     MUT_CLASSES = ["all", "nonsynonymous", "synonymous"]
-    mut_class = mo.ui.dropdown(options=MUT_CLASSES, value="all", label="Mutation class")
+    mut_class = mo.ui.dropdown(options=MUT_CLASSES, value="synonymous", label="Mutation class")
     min_count = mo.ui.slider(
         start=0, stop=200, step=5, value=10,
         label="Min count (actual or expected)", show_value=True,
@@ -100,28 +98,21 @@ def _(DATA_DIR):
 
 
 @app.cell
-def _(protein, reference_nt_table, subtype):
-    _GENE_TO_SEGMENT = {
-        "HA": "HA", "NA": "NA", "NP": "NP",
-        "PA": "PA", "PB1": "PB1", "PB2": "PB2",
-        "M1": "MP", "M2": "MP",
-        "NS1": "NS", "NEP": "NS",
-    }
-    _ref_subtype = subtype.value if protein.value in ("HA", "NA") else "all"
-    _segment = _GENE_TO_SEGMENT[protein.value]
-    reference_nt = reference_nt_table.get(f"{_segment}:{_ref_subtype}", {})
+def _(reference_nt_table, segment, subtype):
+    _ref_subtype = subtype.value if segment.value in ("HA", "NA") else "all"
+    reference_nt = reference_nt_table.get(f"{segment.value}:{_ref_subtype}", {})
     return (reference_nt,)
 
 
 @app.cell
-def _(df, host, min_count, mut_class, protein, reference_nt, subtype):
-    _df = df[df["gene"] == protein.value].copy()
+def _(df, host, min_count, mut_class, reference_nt, segment, subtype):
+    _df = df[df["segment"] == segment.value].copy()
 
     # Host filter
     _df = _df[_df["host"] == host.value]
 
     # Subtype filter
-    if protein.value in ("HA", "NA"):
+    if segment.value in ("HA", "NA"):
         _df = _df[_df["subtype"] == subtype.value]
     else:
         _df = _df[_df["subtype"] == "all"]
@@ -225,6 +216,7 @@ def _(alt, plot_data):
             color=alt.Color("delta_fitness:Q", scale=color_scale, title="Fitness effect"),
             tooltip=[
                 alt.Tooltip("site:Q", title="Site"),
+                alt.Tooltip("gene:N", title="Gene"),
                 alt.Tooltip("wt_nt:N", title="Ref nt"),
                 alt.Tooltip("mut_nt:N", title="Mut nt"),
                 alt.Tooltip("mut_class:N", title="Mutation class"),
@@ -261,19 +253,19 @@ def _(alt, plot_data):
 
 
 @app.cell
-def _(chart, host, min_count, mo, mut_class, plot_data, protein, subtype):
+def _(chart, host, min_count, mo, mut_class, plot_data, segment, subtype):
     _n_muts = len(plot_data)
     _n_sites = plot_data["site"].nunique()
     summary = mo.md(f"**{_n_muts} mutations shown across {_n_sites} sites.**")
 
-    if protein.value in ("HA", "NA"):
+    if segment.value in ("HA", "NA"):
         controls = mo.hstack(
-            [protein, subtype, host, mut_class, min_count],
+            [segment, subtype, host, mut_class, min_count],
             gap=2,
         )
     else:
         controls = mo.hstack(
-            [protein, host, mut_class, min_count],
+            [segment, host, mut_class, min_count],
             gap=2,
         )
 
