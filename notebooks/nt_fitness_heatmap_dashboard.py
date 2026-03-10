@@ -12,6 +12,8 @@ def _():
     import pandas as pd
 
     import altair as alt
+    # Use default (inline JSON) transformer — avoids pyarrow dependency in WASM/Pyodide
+    alt.data_transformers.enable("default")
     alt.data_transformers.disable_max_rows()
     # Suppress narwhals/altair compatibility warning (marimo wraps DataFrames in narwhals)
     warnings.filterwarnings("ignore", message="You passed a.*narwhals")
