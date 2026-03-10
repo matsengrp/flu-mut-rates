@@ -154,10 +154,15 @@ def _(alt, plot_data):
         clamp=True,
     )
 
-    # Brush on quantitative x so numeric interval selection works correctly
+    # Brush on quantitative x so numeric interval selection works correctly.
+    # Set an initial value so the heatmap doesn't try to render all sites at once —
+    # with site:O and width=Step(16), a 2000+ site segment would be ~36 000 px wide.
+    _all_sites = sorted(plot_data["site"].unique()) if len(plot_data) > 0 else [1, 100]
+    _init_brush_max = _all_sites[min(199, len(_all_sites) - 1)]
     site_brush = alt.selection_interval(
         name="site_brush",
         encodings=["x"],
+        value={"x": [_all_sites[0], _init_brush_max]},
         mark=alt.BrushConfig(stroke="black", strokeWidth=2),
     )
 
