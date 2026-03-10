@@ -199,7 +199,7 @@ def _(alt, plot_data):
         .mark_bar(color="lightgray", opacity=0.2, width={"band": 1.0})
         .transform_filter(site_brush)
         .encode(x=alt.X("site:O", title="Site",
-                         axis=alt.Axis(labelOverlap=True, labelAngle=0)))
+                         axis=alt.Axis(labelOverlap=False, labelAngle=-90)))
     )
 
     # Colored rectangles
@@ -209,8 +209,8 @@ def _(alt, plot_data):
         .transform_filter(site_brush)
         .encode(
             x=alt.X("site:O", title="Site",
-                    axis=alt.Axis(labelOverlap=True, labelAngle=0)),
-            y=alt.Y("mut_nt:N", title="Mutant nt",
+                    axis=alt.Axis(labelOverlap=False, labelAngle=-90)),
+            y=alt.Y("mut_nt:N", title="Mutant NT",
                     scale=alt.Scale(domain=NT_ORDER),
                     axis=alt.Axis(grid=True, tickBand="extent",
                                   gridColor="#333333", gridWidth=2)),
@@ -234,12 +234,12 @@ def _(alt, plot_data):
         .mark_text(text="x", color="black", fontSize=10)
         .transform_filter(site_brush)
         .encode(
-            x=alt.X("site:O", axis=alt.Axis(labelOverlap=True, labelAngle=0)),
+            x=alt.X("site:O", axis=alt.Axis(labelOverlap=False, labelAngle=-90)),
             y=alt.Y("wt_nt:N", scale=alt.Scale(domain=NT_ORDER)),
         )
     )
 
-    heatmap = (background + heatmap_rects + wt_marks).properties(width=alt.Step(16), height=100)
+    heatmap = (background + heatmap_rects + wt_marks).properties(width=alt.Step(16), height=70)
 
     # --- Final composition ---
     chart = (
