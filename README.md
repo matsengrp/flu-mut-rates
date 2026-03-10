@@ -237,6 +237,13 @@ Processes raw deep mutational scanning (DMS) data from external sources into sta
 2. Aligns the DMS NEP sequence (PR8 strain) to the reference using MUSCLE; uses actual DMS site numbers for coordinate mapping to handle non-consecutive site numbering
 3. Outputs `results/dms_data/Teo_NEP/processed_dms_data.csv` — NEP DMS data with tree reference site numbering
 
+**`process_dms_data_chen_pa.ipynb`** (Chen et al., PA):
+1. Parses the AA mutation column to extract wildtype AA, DMS site, and mutant AA; excludes indel and stop codon mutations
+2. Averages the two no-drug fitness replicates (P1NO-1-fit, P1NO-2-fit) and groups by AA mutation (multiple nucleotide changes can produce the same AA change)
+3. Computes log-scale DMS effects: `log(mean fitness without drug)`
+4. Aligns the DMS sequence (first 240 AA of PA) to the PA tree reference using MUSCLE to establish site numbering correspondence
+5. Outputs `results/dms_data/Chen_PA/processed_dms_data.csv` — PA DMS data with tree reference site numbering
+
 ### Step 11: Analyze Site-Specific Rates
 
 Executes an analysis notebook that:
@@ -450,6 +457,7 @@ Located in the `results/` root directory:
    - `Li_PB1/processed_dms_data.csv` - PB1 DMS fitness effects (Li et al. 2023) with tree reference site numbering
    - `Hom_M1/processed_dms_data.csv` - M1 DMS fitness effects (Hom et al. 2019) with tree reference site numbering
    - `Teo_NEP/processed_dms_data.csv` - NEP DMS fitness effects (Teo et al. 2024) with tree reference site numbering
+   - `Chen_PA/processed_dms_data.csv` - PA DMS fitness effects (Chen et al. 2024) for first 240 AA with tree reference site numbering
 
 ### Output Structure Example
 
@@ -494,7 +502,9 @@ results/
 │   │   └── processed_dms_data.csv
 │   ├── Hom_M1/
 │   │   └── processed_dms_data.csv
-│   └── Teo_NEP/
+│   ├── Teo_NEP/
+│   │   └── processed_dms_data.csv
+│   └── Chen_PA/
 │       └── processed_dms_data.csv
 ├── .process_dms_data_soh_pb2.done
 ├── .summarize_filter_logs.done
