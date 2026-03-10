@@ -631,7 +631,7 @@ EOF
 # Export the AA fitness heatmap dashboard as a WASM HTML file for GitHub Pages
 rule export_dashboard:
     input:
-        notebook="notebooks/fitness_heatmap_dashboard.py",
+        notebook="notebooks/aa_fitness_heatmap_dashboard.py",
         aa_fitness=f"{config['output_dir']}/aa_fitness_effects.csv",
         reference_aa=f"{config['output_dir']}/reference_aa.json"
     output:

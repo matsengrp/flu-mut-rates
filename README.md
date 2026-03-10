@@ -514,7 +514,7 @@ results/
 
 Two interactive fitness effect dashboards are hosted via GitHub Pages under `docs/` and exported using [marimo](https://marimo.io/) in WASM mode:
 
-- **AA dashboard** (`docs/aa/index.html`): per-amino-acid-mutation fitness effects (`notebooks/fitness_heatmap_dashboard.py`)
+- **AA dashboard** (`docs/aa/index.html`): per-amino-acid-mutation fitness effects (`notebooks/aa_fitness_heatmap_dashboard.py`)
 - **NT dashboard** (`docs/nt/index.html`): per-nucleotide-mutation fitness effects (`notebooks/nt_fitness_heatmap_dashboard.py`)
 
 To regenerate the HTML exports after modifying a dashboard notebook, run the corresponding Snakemake rule:
@@ -545,7 +545,7 @@ Create the conda environment from the provided file:
 
 ```bash
 conda env create -f environment.yml
-conda activate flu-syn-rates
+conda activate flu-mut-rates
 ```
 
 The pipeline will automatically execute Jupyter notebooks as part of the workflow using `jupyter nbconvert`.

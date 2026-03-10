@@ -219,7 +219,6 @@ def _(alt, plot_data):
                 alt.Tooltip("site:Q", title="Site"),
                 alt.Tooltip("wt_nt:N", title="Ref nt"),
                 alt.Tooltip("mut_nt:N", title="Mut nt"),
-                alt.Tooltip("motif:N", title="Motif"),
                 alt.Tooltip("mut_class:N", title="Mutation class"),
                 alt.Tooltip("delta_fitness:Q", title="Fitness effect", format=".3f"),
                 alt.Tooltip("actual_count:Q", title="Actual count", format=".1f"),
