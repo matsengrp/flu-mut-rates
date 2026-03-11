@@ -347,18 +347,17 @@ rule process_dms_data_yu_ha:
         ha_numbering="data/dms_data/Yu_HA/site_numbering_map.csv"
     output:
         ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_yu_ha.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_yu_ha.ipynb \
-            process_dms_data_yu_ha.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_yu_ha.ipynb &> ../{log}
         """
 
 # Process NP DMS data from Bloom et al.
@@ -368,18 +367,17 @@ rule process_dms_data_bloom_np:
         np_data="data/dms_data/Bloom_NP/Supplementary_file_1.xls"
     output:
         np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_bloom_np.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_bloom_np.ipynb \
-            process_dms_data_bloom_np.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_bloom_np.ipynb &> ../{log}
         """
 
 # Process PB2 DMS data from Soh et al. (alignment QC)
@@ -389,18 +387,17 @@ rule process_dms_data_soh_pb2:
         pb2_data="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv"
     output:
         touch("{output_dir}/.process_dms_data_soh_pb2.done")
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_soh_pb2.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_soh_pb2.ipynb \
-            process_dms_data_soh_pb2.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_soh_pb2.ipynb &> ../{log}
         """
 
 # Process NA DMS data from Wang et al. (sequence comparison)
@@ -410,18 +407,17 @@ rule process_dms_data_wang_na:
         na_data="data/dms_data/Wang_NA/msystems.00670-23-s0006.xlsx"
     output:
         na_dms="{output_dir}/dms_data/Wang_NA/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_wang_na.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_wang_na.ipynb \
-            process_dms_data_wang_na.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_wang_na.ipynb &> ../{log}
         """
 
 # Process PB1 DMS data from Li et al.
@@ -431,18 +427,17 @@ rule process_dms_data_li_pb1:
         pb1_data="data/dms_data/Li_PB1/jvi.01329-23-s0008.csv"
     output:
         pb1_dms="{output_dir}/dms_data/Li_PB1/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_li_pb1.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_li_pb1.ipynb \
-            process_dms_data_li_pb1.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_li_pb1.ipynb &> ../{log}
         """
 
 # Process M1 DMS data from Hom et al.
@@ -453,18 +448,17 @@ rule process_dms_data_hom_m1:
         fasta="data/dms_data/Hom_M1/PR8-M1.fasta"
     output:
         m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_hom_m1.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_hom_m1.ipynb \
-            process_dms_data_hom_m1.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_hom_m1.ipynb &> ../{log}
         """
 
 # Process NEP DMS data from Teo et al.
@@ -474,18 +468,17 @@ rule process_dms_data_teo_nep:
         nep_data="data/dms_data/Teo_NEP/mmc2.xlsx"
     output:
         nep_dms="{output_dir}/dms_data/Teo_NEP/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_teo_nep.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_teo_nep.ipynb \
-            process_dms_data_teo_nep.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_teo_nep.ipynb &> ../{log}
         """
 
 # Process PA DMS data from Chen et al.
@@ -495,18 +488,17 @@ rule process_dms_data_chen_pa:
         pa_data="data/dms_data/Chen_PA/fitness calculation.xlsx"
     output:
         pa_dms="{output_dir}/dms_data/Chen_PA/processed_dms_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_dms_data_chen_pa.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_dms_data_chen_pa.ipynb \
-            process_dms_data_chen_pa.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_dms_data_chen_pa.ipynb &> ../{log}
         """
 
 
@@ -550,18 +542,17 @@ rule process_shapemap_data:
         )
     output:
         "{output_dir}/shapemap/all_data.csv"
-    params:
-        data_dir=config["data_dir"]
     log:
         "{output_dir}/logs/process_shapemap_data.log"
     shell:
         """
-        data_dir=$(realpath {params.data_dir}) && \
         cd notebooks && \
-        papermill \
-            process_shapemap_data.ipynb \
-            process_shapemap_data.ipynb \
-            -p data_dir $data_dir &> ../{log}
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            process_shapemap_data.ipynb &> ../{log}
         """
 
 # Align protein sequences across subtypes (only for HA and NA)
