@@ -325,7 +325,8 @@ rule compute_fitness_effects:
     output:
         actual_expected="{output_dir}/actual_expected.csv",
         syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
-        aa_fitness="{output_dir}/aa_fitness_effects.csv"
+        aa_fitness="{output_dir}/aa_fitness_effects.csv",
+        nt_fitness="{output_dir}/nt_fitness_effects.csv"
     log:
         "{output_dir}/logs/compute_fitness_effects.log"
     shell:
