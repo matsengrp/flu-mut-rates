@@ -116,6 +116,7 @@ final_outputs.extend([
     f"{config['output_dir']}/dms_data/Li_PB1/processed_dms_data.csv",
     f"{config['output_dir']}/dms_data/Hom_M1/processed_dms_data.csv",
     f"{config['output_dir']}/dms_data/Teo_NEP/processed_dms_data.csv",
+    f"{config['output_dir']}/dms_data/Chen_PA/processed_dms_data.csv",
 ])
 
 # Add analyze_fitness_effects to final targets
@@ -487,6 +488,28 @@ rule process_dms_data_teo_nep:
             -p data_dir $data_dir &> ../{log}
         """
 
+# Process PA DMS data from Chen et al.
+rule process_dms_data_chen_pa:
+    input:
+        notebook="notebooks/process_dms_data_chen_pa.ipynb",
+        pa_data="data/dms_data/Chen_PA/fitness calculation.xlsx"
+    output:
+        pa_dms="{output_dir}/dms_data/Chen_PA/processed_dms_data.csv"
+    params:
+        data_dir=config["data_dir"]
+    log:
+        "{output_dir}/logs/process_dms_data_chen_pa.log"
+    shell:
+        """
+        data_dir=$(realpath {params.data_dir}) && \
+        cd notebooks && \
+        papermill \
+            process_dms_data_chen_pa.ipynb \
+            process_dms_data_chen_pa.ipynb \
+            -p data_dir $data_dir &> ../{log}
+        """
+
+
 # Analyze fitness effects and compare to DMS data
 rule analyze_fitness_effects:
     input:
@@ -499,7 +522,8 @@ rule analyze_fitness_effects:
         na_dms="{output_dir}/dms_data/Wang_NA/processed_dms_data.csv",
         pb1_dms="{output_dir}/dms_data/Li_PB1/processed_dms_data.csv",
         m1_dms="{output_dir}/dms_data/Hom_M1/processed_dms_data.csv",
-        nep_dms="{output_dir}/dms_data/Teo_NEP/processed_dms_data.csv"
+        nep_dms="{output_dir}/dms_data/Teo_NEP/processed_dms_data.csv",
+        pa_dms="{output_dir}/dms_data/Chen_PA/processed_dms_data.csv"
     output:
         touch("{output_dir}/.analyze_fitness_effects.done")
     log:
