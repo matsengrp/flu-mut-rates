@@ -5,3 +5,9 @@ data/
 scripts/__pycache__
 run.sbatch
 .claude
+docs/*/CLAUDE.md
+docs/*/*.png
+docs/*/*.ico
+docs/*/logo.png
+docs/*/manifest.json
+docs/*/site.webmanifest
