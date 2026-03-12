@@ -1,4 +1,4 @@
-# flu-syn-rates
+# flu-mut-rates
 
 ## Overview
 
@@ -9,7 +9,7 @@ This pipeline calculates synonymous and non-synonymous mutation rates across inf
 ### Directory Structure
 
 ```
-flu-syn-rates/
+flu-mut-rates/
 ├── Snakefile             # Main workflow definition
 ├── config.yaml           # Configuration file
 ├── scripts/
