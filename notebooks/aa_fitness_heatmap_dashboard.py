@@ -257,10 +257,11 @@ def _(alt, plot_data):
 
 
 @app.cell
-def _(chart, host, min_count, mo, pd, plot_data, protein, reference_aa_accession, subtype):
+def _(chart, host, min_count, mo, plot_data, protein, reference_aa_accession, subtype):
     _n_muts = len(plot_data)
     _n_sites = plot_data["codon_site"].nunique()
-    summary = mo.md(f"**{_n_muts} mutations shown across {_n_sites} sites.**")
+    _acc = reference_aa_accession or "—"
+    summary = mo.md(f"**{_n_muts} mutations shown across {_n_sites} sites (reference sequence: {_acc}).**")
 
     if protein.value in ("HA", "NA"):
         controls = mo.hstack(
@@ -274,14 +275,17 @@ def _(chart, host, min_count, mo, pd, plot_data, protein, reference_aa_accession
         )
 
     description = mo.md("""
-## Interactive dashboard of fitness effects of amino-acid mutations to influenza
+## Fitness effects of amino-acid mutations to influenza
 
-This dashboard shows the fitness effect of amino-acid mutations to influenza proteins.
+This dashboard shows the fitness effects of amino-acid mutations to influenza proteins, as
+estimated in Haddox et al., 2026.
 
 **Fitness effects** are estimated as the log ratio of actual to expected mutation counts
-at each site, where expected counts are derived from a neutral mutation-rate model
-that accounts for mutation type and sequence context. Negative values (blue) indicate
-the mutation is deleterious, while positive values (red) indicate the mutation is beneficial.
+at each site, where actual counts correspond to the number of times a mutation is observed
+to occur along the branches of a phylogenetic tree, and expected counts are derived from a
+neutral mutation-rate model that accounts for mutation type and sequence context. Negative
+values (blue) indicate the mutation is deleterious, while positive values (red) indicate
+the mutation is beneficial.
 
 **How to use:**
 - Select a **protein**, **subtype** (for HA/NA), and **host** with the dropdowns.
@@ -294,21 +298,10 @@ the mutation is deleterious, while positive values (red) indicate the mutation i
 - **Hover** over any point or cell for detailed values.
 
 Mutations are filtered to sites where the wild-type amino acid matches the reference
-sequence shown in the table below.
+sequence listed in the summary line above the plot.
 """)
 
-    _ref_subtype = subtype.value if protein.value in ("HA", "NA") else "all"
-    _ref_table = mo.ui.table(
-        pd.DataFrame([{
-            "Protein": protein.value,
-            "Subtype": _ref_subtype,
-            "Reference accession": reference_aa_accession or "—",
-        }]),
-        selection=None,
-        label="Reference sequence",
-    )
-
-    mo.vstack([description, _ref_table, controls, summary, mo.ui.altair_chart(chart)])
+    mo.vstack([controls, summary, mo.ui.altair_chart(chart), description])
     return
 
 
