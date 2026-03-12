@@ -59,11 +59,13 @@ def _(DATA_DIR):
         with open(_url) as _f:
             # Keys are "GENE:SUBTYPE"; codon sites are string keys -> convert to int
             _raw = json.load(_f)
+    # Extract accessions before converting site keys
+    aa_accessions = _raw.pop("_accessions", {})
     reference_aa_table = {
         key: {int(k): v for k, v in sites.items()}
         for key, sites in _raw.items()
     }
-    return (reference_aa_table,)
+    return aa_accessions, reference_aa_table
 
 
 @app.cell
@@ -101,10 +103,12 @@ def _(mo):
 
 
 @app.cell
-def _(protein, reference_aa_table, subtype):
+def _(aa_accessions, protein, reference_aa_table, subtype):
     _ref_subtype = subtype.value if protein.value in ("HA", "NA") else "all"
-    reference_aa = reference_aa_table.get(f"{protein.value}:{_ref_subtype}", {})
-    return (reference_aa,)
+    _key = f"{protein.value}:{_ref_subtype}"
+    reference_aa = reference_aa_table.get(_key, {})
+    reference_aa_accession = aa_accessions.get(_key, "")
+    return reference_aa, reference_aa_accession
 
 
 @app.cell
@@ -253,7 +257,7 @@ def _(alt, plot_data):
 
 
 @app.cell
-def _(chart, host, min_count, mo, plot_data, protein, subtype):
+def _(chart, host, min_count, mo, pd, plot_data, protein, reference_aa_accession, subtype):
     _n_muts = len(plot_data)
     _n_sites = plot_data["codon_site"].nunique()
     summary = mo.md(f"**{_n_muts} mutations shown across {_n_sites} sites.**")
@@ -269,7 +273,42 @@ def _(chart, host, min_count, mo, plot_data, protein, subtype):
             gap=2,
         )
 
-    mo.vstack([controls, summary, mo.ui.altair_chart(chart)])
+    description = mo.md("""
+## Interactive dashboard of fitness effects of amino-acid mutations to influenza
+
+This dashboard shows the fitness effect of amino-acid mutations to influenza proteins.
+
+**Fitness effects** are estimated as the log ratio of actual to expected mutation counts
+at each site, where expected counts are derived from a neutral mutation-rate model
+that accounts for mutation type and sequence context. Negative values (blue) indicate
+the mutation is deleterious, while positive values (red) indicate the mutation is beneficial.
+
+**How to use:**
+- Select a **protein**, **subtype** (for HA/NA), and **host** with the dropdowns.
+- Use **Min count** to hide sites with low counts. The dashboard will only show sites
+  with at least the indicated number of actual or expected counts.
+- **Drag** the purple zoom bar to pan and zoom into a region of interest.
+- The **line plot** shows the mean fitness effect across all nonsynonymous mutations per site.
+- The **heatmap** shows site-specific fitness effects of mutations. An **×** marks
+  the reference amino acid at each site.
+- **Hover** over any point or cell for detailed values.
+
+Mutations are filtered to sites where the wild-type amino acid matches the reference
+sequence shown in the table below.
+""")
+
+    _ref_subtype = subtype.value if protein.value in ("HA", "NA") else "all"
+    _ref_table = mo.ui.table(
+        pd.DataFrame([{
+            "Protein": protein.value,
+            "Subtype": _ref_subtype,
+            "Reference accession": reference_aa_accession or "—",
+        }]),
+        selection=None,
+        label="Reference sequence",
+    )
+
+    mo.vstack([description, _ref_table, controls, summary, mo.ui.altair_chart(chart)])
     return
 
 

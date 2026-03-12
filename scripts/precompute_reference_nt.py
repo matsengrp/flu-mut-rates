@@ -25,20 +25,25 @@ SEGMENT_SUBTYPES = {
 
 
 def load_reference_nt(segment, subtype):
-    fasta_path = f"{DATA_DIR}/{segment}/{subtype}/curated_root.fasta"
-    ref_seq = str(next(SeqIO.parse(fasta_path, "fasta")).seq)
-    return {str(i + 1): nt for i, nt in enumerate(ref_seq)}
+    fasta_path = f"{DATA_DIR}/{segment}/{subtype}/curated_reference.fasta"
+    rec = next(SeqIO.parse(fasta_path, "fasta"))
+    sites = {str(i + 1): nt for i, nt in enumerate(str(rec.seq))}
+    return rec.id, sites
 
 
 result = {}
+accessions = {}
 for segment, subtypes in SEGMENT_SUBTYPES.items():
     for subtype in subtypes:
         key = f"{segment}:{subtype}"
         print(f"Processing {key}...")
-        nt = load_reference_nt(segment, subtype)
+        acc, nt = load_reference_nt(segment, subtype)
         result[key] = nt
+        accessions[key] = acc
+
+result["_accessions"] = accessions
 
 with open("results/reference_nt.json", "w") as f:
     json.dump(result, f)
 
-print(f"Done. Wrote {len(result)} entries to results/reference_nt.json")
+print(f"Done. Wrote {len(result) - 1} entries to results/reference_nt.json")

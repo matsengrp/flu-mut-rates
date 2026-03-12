@@ -42,7 +42,8 @@ def load_reference_aa(segment, subtype, gene):
         force=True,
         merge_strategy="create_unique",
     )
-    ref_seq = str(next(SeqIO.parse(f"{base}/curated_reference.fasta", "fasta")).seq)
+    rec = next(SeqIO.parse(f"{base}/curated_reference.fasta", "fasta"))
+    ref_seq = str(rec.seq)
 
     cdss = []
     for cds in db.features_of_type("CDS"):
@@ -51,28 +52,32 @@ def load_reference_aa(segment, subtype, gene):
     cdss.sort()
 
     if not cdss:
-        return {}
+        return None, {}
 
     cds_nt = "".join(ref_seq[s - 1 : e] for s, e in cdss)
     cds_nt = cds_nt[: len(cds_nt) - len(cds_nt) % 3]
     protein = str(Seq(cds_nt).translate(to_stop=True))
 
-    return {str(i + 1): aa for i, aa in enumerate(protein)}
+    return rec.id, {str(i + 1): aa for i, aa in enumerate(protein)}
 
 
 result = {}
+accessions = {}
 for gene, subtypes in GENE_SUBTYPES.items():
     segment = GENE_TO_SEGMENT[gene]
     for subtype in subtypes:
         key = f"{gene}:{subtype}"
         print(f"Processing {key}...")
-        aa = load_reference_aa(segment, subtype, gene)
+        acc, aa = load_reference_aa(segment, subtype, gene)
         if aa:
             result[key] = aa
+            accessions[key] = acc
         else:
             print(f"  WARNING: no CDS found for {key}")
+
+result["_accessions"] = accessions
 
 with open("results/reference_aa.json", "w") as f:
     json.dump(result, f)
 
-print(f"Done. Wrote {len(result)} entries to results/reference_aa.json")
+print(f"Done. Wrote {len(result) - 1} entries to results/reference_aa.json")
