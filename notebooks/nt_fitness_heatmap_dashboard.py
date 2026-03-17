@@ -300,7 +300,7 @@ def _(
     **How to use:**
     - Select a **segment**, **subtype**, and **host** with the dropdowns.
     - Use **Mutation class** to focus on synonymous (default), nonsynonymous, or all mutations.
-    - Use **Min count** to hide sites with low counts. The dashboard will only show mutations
+    - Use **Min count** to hide mutations with low counts. The dashboard will only show mutations
       with at least the indicated number of actual or expected counts.
     - **Drag** the purple zoom bar to pan and zoom into a region of interest.
     - The **line plot** shows the mean fitness effect of all mutations at a site.

@@ -257,7 +257,16 @@ def _(alt, plot_data):
 
 
 @app.cell
-def _(chart, host, min_count, mo, plot_data, protein, reference_aa_accession, subtype):
+def _(
+    chart,
+    host,
+    min_count,
+    mo,
+    plot_data,
+    protein,
+    reference_aa_accession,
+    subtype,
+):
     _n_muts = len(plot_data)
     _n_sites = plot_data["codon_site"].nunique()
     _acc = reference_aa_accession or "—"
@@ -275,31 +284,31 @@ def _(chart, host, min_count, mo, plot_data, protein, reference_aa_accession, su
         )
 
     description = mo.md("""
-## Fitness effects of amino-acid mutations to influenza virus proteins
+    ## Fitness effects of amino-acid mutations to influenza virus proteins
 
-This dashboard shows the fitness effects of amino-acid mutations to influenza proteins, as
-estimated in Haddox et al., 2026.
+    This dashboard shows the fitness effects of amino-acid mutations to influenza proteins, as
+    estimated in Haddox et al., 2026.
 
-**Fitness effects** are estimated as the log ratio of actual to expected mutation counts
-at each site. Actual counts correspond to the number of times a mutation is observed
-to occur along the branches of a phylogenetic tree, and expected counts are derived from a
-model that estimates how many times a mutation is expected to occur under neutrality.
-Negative values (blue) indicate the mutation is deleterious, while positive values (red)
-indicate the mutation is beneficial.
+    **Fitness effects** are estimated as the log ratio of actual to expected mutation counts
+    at each site. Actual counts correspond to the number of times a mutation is observed
+    to occur along the branches of a phylogenetic tree, and expected counts are derived from a
+    model that estimates how many times a mutation is expected to occur under neutrality.
+    Negative values (blue) indicate the mutation is deleterious, while positive values (red)
+    indicate the mutation is beneficial.
 
-**How to use:**
-- Select a **protein**, **subtype** (for HA/NA), and **host** with the dropdowns.
-- Use **Min count** to hide sites with low counts. The dashboard will only show mutations
-  with at least the indicated number of actual or expected counts.
-- **Drag** the purple zoom bar to pan and zoom into a region of interest.
-- The **line plot** shows the mean fitness effect of nonsynonymous mutations at a site.
-- The **heatmap** shows site-specific fitness effects of mutations. An **×** marks
-  the reference amino acid at each site.
-- **Hover** over any point or cell for detailed values.
+    **How to use:**
+    - Select a **protein**, **subtype** (for HA/NA), and **host** with the dropdowns.
+    - Use **Min count** to hide mutations with low counts. The dashboard will only show mutations
+      with at least the indicated number of actual or expected counts.
+    - **Drag** the purple zoom bar to pan and zoom into a region of interest.
+    - The **line plot** shows the mean fitness effect of nonsynonymous mutations at a site.
+    - The **heatmap** shows site-specific fitness effects of mutations. An **×** marks
+      the reference amino acid at each site.
+    - **Hover** over any point or cell for detailed values.
 
-The heatmap shows mutations to a specific reference sequence, the accession of which is
-given in the summary line above the plot. The full dataset includes additional mutations.
-""")
+    The heatmap shows mutations to a specific reference sequence, the accession of which is
+    given in the summary line above the plot. The full dataset includes additional mutations.
+    """)
 
     mo.vstack([controls, summary, mo.ui.altair_chart(chart), description])
     return
