@@ -11,3 +11,4 @@ docs/*/*.ico
 docs/*/logo.png
 docs/*/manifest.json
 docs/*/site.webmanifest
+scripts/copy_pcps.sh

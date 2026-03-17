@@ -285,31 +285,31 @@ def _(
         )
 
     description = mo.md("""
-    ## Fitness effects of nucleotide-level mutations to influenza
+    ## Fitness effects of nucleotide-level mutations to influenza virus protein-coding genes
 
-    This dashboard shows the fitness effects of single-nucleotide mutations across the
-    influenza genome, as estimated in Haddox et al., 2026.
+    This dashboard shows the fitness effects of single-nucleotide mutations to influenza
+    protein-coding sequences, as estimated in Haddox et al., 2026.
 
     **Fitness effects** are estimated as the log ratio of actual to expected mutation counts
-    at each site, where actual counts correspond to the number of times a mutation is observed
+    at each site. Actual counts correspond to the number of times a mutation is observed
     to occur along the branches of a phylogenetic tree, and expected counts are derived from a
-    neutral mutation-rate model that accounts for mutation type and sequence context. Negative
-    values (blue) indicate the mutation is deleterious, while positive values (red) indicate
-    the mutation is beneficial.
+    model that estimates how many times a mutation is expected to occur under neutrality.
+    Negative values (blue) indicate the mutation is deleterious, while positive values (red)
+    indicate the mutation is beneficial.
 
     **How to use:**
     - Select a **segment**, **subtype**, and **host** with the dropdowns.
-    - Use **Mutation class** to focus on synonymous or nonsynonymous changes.
-    - Use **Min count** to hide sites with low counts. The dashboard will only show sites
+    - Use **Mutation class** to focus on synonymous (default), nonsynonymous, or all mutations.
+    - Use **Min count** to hide sites with low counts. The dashboard will only show mutations
       with at least the indicated number of actual or expected counts.
     - **Drag** the purple zoom bar to pan and zoom into a region of interest.
-    - The **line plot** shows the mean fitness effect across all mutations per site.
+    - The **line plot** shows the mean fitness effect of all mutations at a site.
     - The **heatmap** shows site-specific fitness effects of mutations. An **×** marks
       the reference nucleotide at each site.
     - **Hover** over any point or cell for detailed values.
 
-    Mutations are filtered to sites where the wild-type nucleotide matches the reference
-    sequence listed in the summary line above the plot.
+    The heatmap shows mutations to a specific reference sequence, the accession of which is
+    given in the summary line above the plot. The full dataset includes additional mutations.
     """)
 
     mo.vstack([controls, summary, mo.ui.altair_chart(chart), description])
