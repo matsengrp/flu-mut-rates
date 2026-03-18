@@ -639,6 +639,12 @@ rule create_landing_page:
     <a href="aa/">Amino acid mutations</a>
     <a href="nt/">Nucleotide mutations</a>
   </div>
+  <p style="margin-top: 2rem; font-size: 0.9rem; color: #aaa; max-width: 500px; text-align: center; line-height: 1.5;">
+    Fitness effects were estimated in Haddox et al. Interactive plots were made
+    using code adapted from the
+    <a href="https://jbloomlab.github.io/polyclonal/" style="color: #BB86FC; border: none; padding: 0; background: none; font-size: inherit;">polyclonal</a>
+    software package.
+  </p>
 </body>
 </html>
 EOF

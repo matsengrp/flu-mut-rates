@@ -310,6 +310,9 @@ def _(
 
     The heatmap shows mutations to a specific reference sequence, the accession of which is
     given in the summary line above the plot. The full dataset includes additional mutations.
+
+    Interactive plots were made using code adapted from the
+    [polyclonal](https://jbloomlab.github.io/polyclonal/) software package.
     """)
 
     mo.vstack([controls, summary, mo.ui.altair_chart(chart), description])
