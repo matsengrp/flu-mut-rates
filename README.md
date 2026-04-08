@@ -48,8 +48,7 @@ flu-mut-rates/
 │   │   │   ├── final_tree.pb.gz          # Global tree (all hosts)
 │   │   │   ├── host_specific_trees/
 │   │   │   │   ├── human_tree.pb.gz
-│   │   │   │   ├── avian_tree.pb.gz
-│   │   │   │   └── swine_tree.pb.gz
+│   │   │   │   └── avian_tree.pb.gz
 │   │   │   ├── geographic_trees/
 │   │   │   │   ├── north_america_tree.pb.gz
 │   │   │   │   ├── europe_tree.pb.gz
@@ -429,14 +428,14 @@ Located in the `results/` root directory:
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `segment_subtype` — combined segment and subtype label (e.g. `"HA_H1"`)
        - `segment_length` — length of the genome segment in nucleotides
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `evo_opp` — evolutionary opportunity
        - `rate` — per-site mutation rate
    - `genome_wide_rates.csv` - Mutation rates by type and class (synonymous, nonsynonymous, nonsense)
      - Columns:
        - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
        - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, or `"nonsense"`)
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `actual_count` — total number of observed mutations of this type/class/host
        - `evo_opp` — evolutionary opportunity
        - `rate` — mutation rate
@@ -449,7 +448,7 @@ Located in the `results/` root directory:
      - Columns:
        - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
        - `motif` — 3-mer sequence context (centered on the mutated site)
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `actual_count` — total number of observed mutations for this type/motif/host
        - `evo_opp` — evolutionary opportunity
        - `rate` — mutation rate
@@ -497,7 +496,7 @@ Located in the `results/` root directory:
        - `expected_count` — expected number of observations under the neutral model (`predicted_rate × evo_opp`)
    - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
      - Columns:
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `gene` — gene containing the site
@@ -509,7 +508,7 @@ Located in the `results/` root directory:
        - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
    - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
      - Columns:
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `gene` — gene containing the site
@@ -568,8 +567,6 @@ results/
 │   │   ├── human/
 │   │   │   └── mutation_counts.csv
 │   │   ├── avian/
-│   │   │   └── mutation_counts.csv
-│   │   ├── swine/
 │   │   │   └── mutation_counts.csv
 │   │   ├── north_america/
 │   │   │   └── mutation_counts.csv
