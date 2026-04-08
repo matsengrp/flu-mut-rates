@@ -11,7 +11,7 @@ def get_subtypes_for_segment(segment):
         return ["all"]
 
 def get_all_mutation_count_files():
-    """Generate list of all mutation_counts.csv files (global + host-specific + geographic + temporal)"""
+    """Generate list of all mutation_counts.csv files (global + host-specific)"""
     files = []
 
     # Global mutation counts (no subdirectory)
@@ -29,17 +29,22 @@ def get_all_mutation_count_files():
                     f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
                 )
 
-    # Geographic mutation counts
+    return files
+
+def get_subset_mutation_count_files():
+    """Generate list of subset mutation_counts.csv files (host + geographic + temporal)"""
+    files = []
+
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
+            for host in config["host_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
+                )
             for geo in config["geographic_groups"]:
                 files.append(
                     f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
                 )
-
-    # Temporal mutation counts
-    for segment in config["segments"]:
-        for subtype in get_subtypes_for_segment(segment):
             for temporal in config["temporal_groups"]:
                 files.append(
                     f"{config['output_dir']}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
@@ -786,7 +791,7 @@ rule export_nt_dashboard:
 rule compute_subset_rates:
     input:
         notebook="notebooks/compute_subset_rates.ipynb",
-        mutation_counts=get_all_mutation_count_files()
+        mutation_counts=get_subset_mutation_count_files()
     output:
         subset_counts="{output_dir}/subset_counts.csv"
     log:
