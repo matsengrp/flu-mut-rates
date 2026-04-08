@@ -11,22 +11,38 @@ def get_subtypes_for_segment(segment):
         return ["all"]
 
 def get_all_mutation_count_files():
-    """Generate list of all mutation_counts.csv files (global + host-specific)"""
+    """Generate list of all mutation_counts.csv files (global + host-specific + geographic + temporal)"""
     files = []
 
-    # Global mutation counts (no host subdirectory)
+    # Global mutation counts (no subdirectory)
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
             files.append(
                 f"{config['output_dir']}/{segment}/{subtype}/mutation_counts.csv"
             )
 
-    # Host-specific mutation counts (human and avian only, excluding swine)
+    # Host-specific mutation counts
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
             for host in config["host_groups"]:
                 files.append(
                     f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
+                )
+
+    # Geographic mutation counts
+    for segment in config["segments"]:
+        for subtype in get_subtypes_for_segment(segment):
+            for geo in config["geographic_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
+                )
+
+    # Temporal mutation counts
+    for segment in config["segments"]:
+        for subtype in get_subtypes_for_segment(segment):
+            for temporal in config["temporal_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
                 )
 
     return files
@@ -37,6 +53,20 @@ for segment in config["segments"]:
     for subtype in get_subtypes_for_segment(segment):
         for host in config["host_groups"]:
             segment_subtype_host_combinations.append((segment, subtype, host))
+
+# Generate all segment-subtype-geographic combinations for geographic trees
+segment_subtype_geo_combinations = []
+for segment in config["segments"]:
+    for subtype in get_subtypes_for_segment(segment):
+        for geo in config["geographic_groups"]:
+            segment_subtype_geo_combinations.append((segment, subtype, geo))
+
+# Generate all segment-subtype-temporal combinations for temporal trees
+segment_subtype_temporal_combinations = []
+for segment in config["segments"]:
+    for subtype in get_subtypes_for_segment(segment):
+        for temporal in config["temporal_groups"]:
+            segment_subtype_temporal_combinations.append((segment, subtype, temporal))
 
 # Generate all segment-subtype combinations for global trees
 segment_subtype_combinations = []
@@ -54,6 +84,18 @@ final_outputs = []
 for segment, subtype, host in segment_subtype_host_combinations:
     final_outputs.append(
         f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
+    )
+
+# Add geographic mutation counts
+for segment, subtype, geo in segment_subtype_geo_combinations:
+    final_outputs.append(
+        f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
+    )
+
+# Add temporal mutation counts
+for segment, subtype, temporal in segment_subtype_temporal_combinations:
+    final_outputs.append(
+        f"{config['output_dir']}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
     )
 
 # Add global mutation counts and PCPs
@@ -125,6 +167,13 @@ final_outputs.append(f"{config['output_dir']}/.analyze_fitness_effects.done")
 # Add summarize_filter_logs notebook to final targets
 final_outputs.append(f"{config['output_dir']}/.summarize_filter_logs.done")
 
+# Add subset analysis outputs to final targets
+final_outputs.extend([
+    f"{config['output_dir']}/subset_counts.csv",
+    f"{config['output_dir']}/subset_aa_fitness_effects.csv",
+    f"{config['output_dir']}/.analyze_subset_fitness_effects.done",
+])
+
 # Add dashboard exports to final targets
 final_outputs.append("docs/index.html")
 final_outputs.append("docs/aa/index.html")
@@ -170,6 +219,54 @@ rule count_mutations_host_trees:
         all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv"
     log:
         "{output_dir}/logs/{segment}/{subtype}/{host}/mutation_counts.log"
+    wildcard_constraints:
+        host="|".join(config["host_groups"])
+    shell:
+        """
+        python scripts/make_count_dfs.py \
+            --tree_path {input.tree_path} \
+            --coding_site_path {input.coding_site_path} \
+            --fasta_path {input.fasta_path} \
+            --gtf_path {input.gtf_path} \
+            --all_counts_path {output.all_counts_path} &> {log}
+        """
+
+# Count mutations along geographic trees
+rule count_mutations_geographic_trees:
+    input:
+        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/geographic_trees/{wildcards.geo}_tree.pb.gz",
+        coding_site_path=rules.make_coding_sites.output.coding_sites,
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
+    output:
+        all_counts_path="{output_dir}/{segment}/{subtype}/{geo}/mutation_counts.csv"
+    log:
+        "{output_dir}/logs/{segment}/{subtype}/{geo}/mutation_counts.log"
+    wildcard_constraints:
+        geo="|".join(config["geographic_groups"])
+    shell:
+        """
+        python scripts/make_count_dfs.py \
+            --tree_path {input.tree_path} \
+            --coding_site_path {input.coding_site_path} \
+            --fasta_path {input.fasta_path} \
+            --gtf_path {input.gtf_path} \
+            --all_counts_path {output.all_counts_path} &> {log}
+        """
+
+# Count mutations along temporal trees
+rule count_mutations_temporal_trees:
+    input:
+        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/temporal_trees/{wildcards.temporal}_tree.pb.gz",
+        coding_site_path=rules.make_coding_sites.output.coding_sites,
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
+    output:
+        all_counts_path="{output_dir}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
+    log:
+        "{output_dir}/logs/{segment}/{subtype}/{temporal}/mutation_counts.log"
+    wildcard_constraints:
+        temporal="|".join(config["temporal_groups"])
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -683,6 +780,67 @@ rule export_nt_dashboard:
         mkdir -p docs/nt/results
         cp {input.nt_fitness} docs/nt/results/
         cp {input.reference_nt} docs/nt/results/
+        """
+
+# Compute mutation rates for subset trees (host, geographic, temporal)
+rule compute_subset_rates:
+    input:
+        notebook="notebooks/compute_subset_rates.ipynb",
+        mutation_counts=get_all_mutation_count_files()
+    output:
+        subset_counts="{output_dir}/subset_counts.csv"
+    log:
+        "{output_dir}/logs/compute_subset_rates.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            compute_subset_rates.ipynb &> ../{log}
+        """
+
+# Compute fitness effects for subset trees using expected rates from global neutral model
+rule compute_subset_fitness_effects:
+    input:
+        notebook="notebooks/compute_subset_fitness_effects.ipynb",
+        subset_counts="{output_dir}/subset_counts.csv",
+        expected_rates="{output_dir}/expected_rates.csv"
+    output:
+        subset_aa_fitness="{output_dir}/subset_aa_fitness_effects.csv"
+    log:
+        "{output_dir}/logs/compute_subset_fitness_effects.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            compute_subset_fitness_effects.ipynb &> ../{log}
+        """
+
+# Analyze fitness effects across subsets with scatter plots
+rule analyze_subset_fitness_effects:
+    input:
+        notebook="notebooks/analyze_subset_fitness_effects.ipynb",
+        subset_aa_fitness="{output_dir}/subset_aa_fitness_effects.csv"
+    output:
+        touch("{output_dir}/.analyze_subset_fitness_effects.done")
+    log:
+        "{output_dir}/logs/analyze_subset_fitness_effects.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            analyze_subset_fitness_effects.ipynb &> ../{log}
         """
 
 # Summarize mutation filter statistics across all trees from log files

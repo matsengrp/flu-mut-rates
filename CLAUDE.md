@@ -78,7 +78,17 @@ results/
 │   │   ├── parent_child_pairs.csv
 │   │   ├── human/
 │   │   │   └── mutation_counts.csv
-│   │   └── avian/
+│   │   ├── avian/
+│   │   │   └── mutation_counts.csv
+│   │   ├── north_america/
+│   │   │   └── mutation_counts.csv
+│   │   ├── europe/
+│   │   │   └── mutation_counts.csv
+│   │   ├── asia/
+│   │   │   └── mutation_counts.csv
+│   │   ├── early/
+│   │   │   └── mutation_counts.csv
+│   │   └── late/
 │   │       └── mutation_counts.csv
 │   └── {H3,H5,H7,H9}/
 ├── NA/
@@ -97,6 +107,8 @@ results/
 ├── evo_opp_thresholds.csv              # Evolutionary opportunity filters
 ├── site_specific_mutation_rates.csv    # Per-site rates
 ├── expected_rates.csv                  # Complete rates table (all 12 mutation types)
+├── subset_counts.csv                   # Aggregated mutation counts for subset trees
+├── subset_aa_fitness_effects.csv       # AA-level fitness effects per subset
 └── neutral_model/
     ├── base/                           # Mutation type only
     ├── local_context/                  # Mutation type + motif
@@ -115,6 +127,8 @@ results/
    - HA subtypes: H1, H3, H5, H7, H9
    - NA subtypes: N1, N2, N6, N8, N9
    - Host groups: human, avian
+   - Geographic groups: north_america, europe, asia
+   - Temporal groups: early, late
    - All genome segments to analyze (PB2, PB1, PA, HA, NP, NA, MP, NS)
 
 3. **scripts/**: Python scripts for analysis:
@@ -126,24 +140,32 @@ results/
    - `ExpectedCalc.py`: Calculate expected mutation counts
 
 4. **notebooks/**: Jupyter notebooks executed as part of pipeline:
-   - `compute_rates.ipynb`: Calculates mutation rates from count data
+   - `compute_rates.ipynb`: Calculates mutation rates from count data (global + host trees)
    - `analyze_genome_wide_rates.ipynb`: Visualizes and analyzes genome-wide rates
+   - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, temporal)
+   - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
+   - `analyze_subset_fitness_effects.ipynb`: Scatter plots comparing fitness effects between subsets
 
 ### Pipeline Workflow
 
 1. **Create Coding Sites** → Maps nucleotide positions to codon positions using GFF annotations
-2. **Count Mutations** → Traverses phylogenetic trees (global and host-specific) to count and classify mutations
+2. **Count Mutations** → Traverses phylogenetic trees (global, host-specific, geographic, and temporal) to count and classify mutations
 3. **Align Proteins** → Cross-subtype protein alignments (HA and NA only)
 4. **Compute Mutation Rates** → Aggregates counts and calculates genome-wide, segment-wide, motif-level, and site-specific rates
 5. **Analyze Genome-Wide Rates** → Executes analysis notebook to visualize rates and compare across hosts/viruses
 6. **Fit Neutral Models** → Fits log-linear models (base, local context, full) to predict synonymous mutation rates
 7. **Augment Expected Rates** → Creates complete expected rates table with all 12 mutation types (adds CG/GC using motif-specific rates where available, segment-wide rates as fallback)
+8. **Compute Subset Rates** → Aggregates mutation counts from subset trees (host, geographic, temporal) with a `subset` column
+9. **Compute Subset Fitness Effects** → Uses global neutral model expected rates to compute AA-level fitness effects per subset
+10. **Analyze Subset Fitness Effects** → Scatter plots comparing fitness effects between pairs of subsets
 
 ### Input Requirements
 
 From flu-usher pipeline:
 - `final_tree.pb.gz`: Global phylogenetic tree (all hosts) in protobuf format
 - `host_specific_trees/{host}_tree.pb.gz`: Host-specific phylogenetic trees (human, avian)
+- `geographic_trees/{geo}_tree.pb.gz`: Geographic phylogenetic trees (north_america, europe, asia)
+- `temporal_trees/{temporal}_tree.pb.gz`: Temporal phylogenetic trees (early, late)
 - `curated_root.fasta`: Reference sequence
 - `curated_reference.gff`: Gene annotations
 - `curated_reference.gtf`: Gene transfer format annotations
@@ -154,7 +176,7 @@ From flu-usher pipeline:
 - HA and NA segments are analyzed by specific subtype
 - Protein alignment is only performed for HA and NA segments
 - The pipeline uses compressed tree files (.pb.gz) from UShER
-- Both global (all hosts) and host-specific trees (human, avian) are analyzed
+- Both global (all hosts) and subset-specific trees (host, geographic, temporal) are analyzed
 - Notebooks are executed automatically via `jupyter nbconvert --execute --inplace`
 - All logs are saved in the `logs/` directory
 - The pipeline can process multiple segments/subtypes in parallel
