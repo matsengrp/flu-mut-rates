@@ -97,11 +97,12 @@ for segment, subtype, geo in segment_subtype_geo_combinations:
         f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
     )
 
-# Add temporal mutation counts
+# Add temporal mutation counts and PCPs
 for segment, subtype, temporal in segment_subtype_temporal_combinations:
-    final_outputs.append(
-        f"{config['output_dir']}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
-    )
+    final_outputs.extend([
+        f"{config['output_dir']}/{segment}/{subtype}/{temporal}/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/{temporal}/parent_child_pairs.csv"
+    ])
 
 # Add global mutation counts and PCPs
 for segment, subtype in segment_subtype_combinations:
@@ -267,7 +268,8 @@ rule count_mutations_temporal_trees:
         fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
-        all_counts_path="{output_dir}/{segment}/{subtype}/{temporal}/mutation_counts.csv"
+        all_counts_path="{output_dir}/{segment}/{subtype}/{temporal}/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/{temporal}/parent_child_pairs.csv"
     log:
         "{output_dir}/logs/{segment}/{subtype}/{temporal}/mutation_counts.log"
     wildcard_constraints:
@@ -279,7 +281,8 @@ rule count_mutations_temporal_trees:
             --coding_site_path {input.coding_site_path} \
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
-            --all_counts_path {output.all_counts_path} &> {log}
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} &> {log}
         """
 
 # Count mutations along global (non-host-specific) trees
