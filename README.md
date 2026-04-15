@@ -2,7 +2,7 @@
 
 ## Overview
 
-This pipeline calculates synonymous and non-synonymous mutation rates across influenza virus sequences by analyzing phylogenetic trees and sequence data. It processes multiple influenza subtypes (e.g., H1, H3, N1, N2), genome segments (e.g., HA, NA, PB2), and host groups (human, avian) as specified in the configuration.
+This pipeline calculates synonymous and non-synonymous mutation rates across influenza virus sequences by analyzing phylogenetic trees and sequence data. It processes multiple influenza subtypes (e.g., H1, H3, N1, N2), genome segments (e.g., HA, NA, PB2), and tree subsets (host groups, geographic regions, temporal periods) as specified in the configuration.
 
 ## Setup
 
@@ -33,7 +33,10 @@ flu-mut-rates/
 │   ├── process_dms_data_hom_m1.ipynb          # Process Hom et al. M1 DMS data
 │   ├── process_dms_data_teo_nep.ipynb         # Process Teo et al. NEP DMS data
 │   ├── analyze_fitness_effects.ipynb          # Compare fitness effects to DMS data
-│   └── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
+│   ├── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
+│   ├── compute_subset_rates.ipynb             # Compute rates for subset trees (host, geographic, temporal)
+│   ├── compute_subset_fitness_effects.ipynb   # Compute AA fitness effects per subset
+│   └── analyze_subset_fitness_effects.ipynb   # Compare fitness effects between subsets
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)
@@ -43,10 +46,16 @@ flu-mut-rates/
 │   │   │   ├── curated_reference.gff
 │   │   │   ├── curated_reference.gtf
 │   │   │   ├── final_tree.pb.gz          # Global tree (all hosts)
-│   │   │   └── host_specific_trees/
-│   │   │       ├── human_tree.pb.gz
-│   │   │       ├── avian_tree.pb.gz
-│   │   │       └── swine_tree.pb.gz
+│   │   │   ├── host_specific_trees/
+│   │   │   │   ├── human_tree.pb.gz
+│   │   │   │   └── avian_tree.pb.gz
+│   │   │   ├── geographic_trees/
+│   │   │   │   ├── north_america_tree.pb.gz
+│   │   │   │   ├── europe_tree.pb.gz
+│   │   │   │   └── asia_tree.pb.gz
+│   │   │   └── temporal_trees/
+│   │   │       ├── early_tree.pb.gz
+│   │   │       └── late_tree.pb.gz
 │   │   └── H3/
 │   │       └── ...
 │   └── NA/
@@ -60,6 +69,8 @@ Edit `config.yaml` to specify:
 - HA and NA subtypes to analyze
 - Genome segments to analyze
 - Host groups to analyze
+- Geographic groups to analyze
+- Temporal groups to analyze
 - Data directory locations
 
 Example configuration:
@@ -83,6 +94,15 @@ segments:
 host_groups:
   - "human"
   - "avian"
+
+geographic_groups:
+  - "north_america"
+  - "europe"
+  - "asia"
+
+temporal_groups:
+  - "early"
+  - "late"
 
 data_dir: "../flu-usher/results"
 output_dir: "results"
@@ -121,6 +141,24 @@ For each segment, subtype, and host combination:
 3. Traverses the tree to count mutations at each branch for that specific host
 4. Classifies mutations as synonymous or non-synonymous
 5. Outputs one file per host group:
+   - `mutation_counts.csv` - Summary of mutations by site and type
+
+#### Geographic Tree Analysis
+For each segment, subtype, and geographic group combination:
+1. Takes the coding sites file from Step 1
+2. Reads the geographic phylogenetic tree (`geographic_trees/{geo}_tree.pb.gz`), reference sequence, and GTF annotation
+3. Traverses the tree to count mutations at each branch for that geographic region
+4. Classifies mutations as synonymous or non-synonymous
+5. Outputs one file per geographic group:
+   - `mutation_counts.csv` - Summary of mutations by site and type
+
+#### Temporal Tree Analysis
+For each segment, subtype, and temporal group combination:
+1. Takes the coding sites file from Step 1
+2. Reads the temporal phylogenetic tree (`temporal_trees/{temporal}_tree.pb.gz`), reference sequence, and GTF annotation
+3. Traverses the tree to count mutations at each branch for that time period
+4. Classifies mutations as synonymous or non-synonymous
+5. Outputs one file per temporal group:
    - `mutation_counts.csv` - Summary of mutations by site and type
 
 ### Step 3: Protein Alignment
@@ -271,6 +309,31 @@ The notebook produces three figures:
 2. Mutation filter summary per tree: passing mutation counts (log scale) and % passing, grouped by host
 3. Stacked bar breakdown of % mutations by filter reason, faceted by host
 
+### Step 14: Compute Subset Rates
+
+Aggregates mutation counts from all subset trees (host-specific, geographic, temporal):
+1. Reads mutation counts from each subset directory
+2. Labels each row with `subset` (group name) and `subset_type` (host/geographic/temporal)
+3. Computes evolutionary opportunity and mutation rates
+4. Outputs `results/subset_counts.csv`
+
+### Step 15: Compute Subset Fitness Effects
+
+Computes amino-acid-level fitness effects for each subset:
+1. Reads `subset_counts.csv` and `expected_rates.csv` (from the global neutral model)
+2. Merges to compute expected counts per mutation under the neutral model
+3. Filters to mutations with at least 10 actual or expected counts
+4. Groups by amino acid mutation and computes fitness effects as log((actual + 0.5) / (expected + 0.5))
+5. Outputs `results/subset_aa_fitness_effects.csv`
+
+### Step 16: Analyze Subset Fitness Effects
+
+Compares fitness effects between subsets:
+1. For each pair of subsets within the same type (e.g., human vs avian, early vs late, north_america vs europe):
+   - Matches nonsynonymous amino acid mutations present in both subsets
+   - Creates scatter plots of fitness effects with Pearson correlation
+2. Filters to mutations meeting the count threshold in both subsets
+
 ## Running the Pipeline
 
 Execute the full pipeline with:
@@ -290,6 +353,12 @@ snakemake --cores 8 results/HA/H1/human/mutation_counts.csv
 
 # Process both global and host-specific for a segment/subtype
 snakemake --cores 8 results/HA/H1/mutation_counts.csv results/HA/H1/human/mutation_counts.csv results/HA/H1/avian/mutation_counts.csv
+
+# Process geographic/temporal subset trees
+snakemake --cores 8 results/HA/H3/north_america/mutation_counts.csv results/HA/H3/early/mutation_counts.csv
+
+# Run subset fitness effect analysis
+snakemake --cores 8 results/subset_aa_fitness_effects.csv
 ```
 
 ## Output Files
@@ -338,6 +407,12 @@ The pipeline generates the following output files:
 3. **Host-Specific Tree Outputs**: `results/{segment}/{subtype}/{host}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific host group (same columns as global `mutation_counts.csv`)
 
+3b. **Geographic Tree Outputs**: `results/{segment}/{subtype}/{geo}/`
+   - `mutation_counts.csv` - Aggregated mutation counts for the specific geographic region (same columns as global `mutation_counts.csv`)
+
+3c. **Temporal Tree Outputs**: `results/{segment}/{subtype}/{temporal}/`
+   - `mutation_counts.csv` - Aggregated mutation counts for the specific temporal group (same columns as global `mutation_counts.csv`)
+
 4. **Aligned Proteins** (HA and NA only): `results/aligned_proteins/{segment}/`
    - Cross-subtype protein alignments
 
@@ -353,14 +428,14 @@ Located in the `results/` root directory:
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `segment_subtype` — combined segment and subtype label (e.g. `"HA_H1"`)
        - `segment_length` — length of the genome segment in nucleotides
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `evo_opp` — evolutionary opportunity
        - `rate` — per-site mutation rate
    - `genome_wide_rates.csv` - Mutation rates by type and class (synonymous, nonsynonymous, nonsense)
      - Columns:
        - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
        - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, or `"nonsense"`)
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `actual_count` — total number of observed mutations of this type/class/host
        - `evo_opp` — evolutionary opportunity
        - `rate` — mutation rate
@@ -373,7 +448,7 @@ Located in the `results/` root directory:
      - Columns:
        - `mut_type` — two-character mutation type (e.g. `"AC"` for A→C)
        - `motif` — 3-mer sequence context (centered on the mutated site)
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `actual_count` — total number of observed mutations for this type/motif/host
        - `evo_opp` — evolutionary opportunity
        - `rate` — mutation rate
@@ -421,7 +496,7 @@ Located in the `results/` root directory:
        - `expected_count` — expected number of observations under the neutral model (`predicted_rate × evo_opp`)
    - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
      - Columns:
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `gene` — gene containing the site
@@ -433,7 +508,7 @@ Located in the `results/` root directory:
        - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
    - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
      - Columns:
-       - `host` — host group (`"human"`, `"avian"`, `"swine"`, or `"all"`)
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
        - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `gene` — gene containing the site
@@ -449,7 +524,28 @@ Located in the `results/` root directory:
 9. **SHAPE-MaP Data**: `results/shapemap/`
    - `all_data.csv` - SHAPE-MaP RNA structure reactivities (Dadonaite et al. 2019) mapped to reference site coordinates for internal segments
 
-10. **Processed DMS Data**: `results/dms_data/`
+10. **Subset Analysis Outputs**:
+   - `subset_counts.csv` - Aggregated mutation counts from all subset trees (host, geographic, temporal)
+     - Same columns as `counts.csv`, except `host` is replaced by:
+       - `subset` — subset name (e.g. `"human"`, `"north_america"`, `"early"`)
+       - `subset_type` — subset category (`"host"`, `"geographic"`, `"temporal"`)
+   - `subset_aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects for each subset
+     - Columns:
+       - `subset` — subset name
+       - `subset_type` — subset category
+       - `subtype` — influenza subtype
+       - `segment` — genome segment
+       - `gene` — gene name
+       - `codon_site` — codon site within the gene
+       - `wt_aa` — wildtype amino acid
+       - `mut_aa` — mutant amino acid
+       - `aa_mut` — amino acid mutation string
+       - `mut_class` — mutation class
+       - `actual_count` — total observed mutations
+       - `expected_count` — total expected mutations under the neutral model
+       - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
+
+11. **Processed DMS Data**: `results/dms_data/`
    - `Yu_HA/processed_dms_data.csv` - HA DMS phenotypes (Yu et al. 2025) with tree reference site numbering
    - `Bloom_NP/processed_dms_data.csv` - NP DMS preferences (Bloom et al. 2014) with log-ratio fitness effects
    - `.process_dms_data_soh_pb2.done` - Sentinel file marking completion of Soh et al. PB2 alignment QC
@@ -472,7 +568,15 @@ results/
 │   │   │   └── mutation_counts.csv
 │   │   ├── avian/
 │   │   │   └── mutation_counts.csv
-│   │   └── swine/
+│   │   ├── north_america/
+│   │   │   └── mutation_counts.csv
+│   │   ├── europe/
+│   │   │   └── mutation_counts.csv
+│   │   ├── asia/
+│   │   │   └── mutation_counts.csv
+│   │   ├── early/
+│   │   │   └── mutation_counts.csv
+│   │   └── late/
 │   │       └── mutation_counts.csv
 │   └── H3/
 │       └── ...
@@ -508,6 +612,9 @@ results/
 │       └── processed_dms_data.csv
 ├── .process_dms_data_soh_pb2.done
 ├── .summarize_filter_logs.done
+├── subset_counts.csv
+├── subset_aa_fitness_effects.csv
+├── .analyze_subset_fitness_effects.done
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv

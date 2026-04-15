@@ -27,6 +27,15 @@ host_groups:
   - "human"
   - "avian"
 
+geographic_groups:
+  - "north_america"
+  - "europe"
+  - "asia"
+
+temporal_groups:
+  - "early"
+  - "late"
+
 # Data directory paths
 data_dir: "../flu-usher/results"
 output_dir: "results"
