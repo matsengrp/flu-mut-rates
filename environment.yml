@@ -26,4 +26,5 @@ dependencies:
   - nbconvert
   - marimo
   - altair
+  - vl-convert-python
   - gh

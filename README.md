@@ -36,7 +36,8 @@ flu-mut-rates/
 │   ├── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
 │   ├── compute_subset_rates.ipynb             # Compute rates for subset trees (host, geographic, temporal)
 │   ├── compute_subset_fitness_effects.ipynb   # Compute AA fitness effects per subset
-│   └── analyze_subset_fitness_effects.ipynb   # Compare fitness effects between subsets
+│   ├── analyze_subset_fitness_effects.ipynb   # Compare fitness effects between subsets
+│   └── check_subset_pcp_overlap.ipynb         # Check PCP overlap between subsets
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)
@@ -140,8 +141,9 @@ For each segment, subtype, and host combination:
 2. Reads the host-specific phylogenetic tree (`host_specific_trees/{host}_tree.pb.gz`), reference sequence, and GTF annotation
 3. Traverses the tree to count mutations at each branch for that specific host
 4. Classifies mutations as synonymous or non-synonymous
-5. Outputs one file per host group:
+5. Outputs two files per host group:
    - `mutation_counts.csv` - Summary of mutations by site and type
+   - `parent_child_pairs.csv` - Detailed mutation records for each branch
 
 #### Geographic Tree Analysis
 For each segment, subtype, and geographic group combination:
@@ -149,8 +151,9 @@ For each segment, subtype, and geographic group combination:
 2. Reads the geographic phylogenetic tree (`geographic_trees/{geo}_tree.pb.gz`), reference sequence, and GTF annotation
 3. Traverses the tree to count mutations at each branch for that geographic region
 4. Classifies mutations as synonymous or non-synonymous
-5. Outputs one file per geographic group:
+5. Outputs two files per geographic group:
    - `mutation_counts.csv` - Summary of mutations by site and type
+   - `parent_child_pairs.csv` - Detailed mutation records for each branch
 
 #### Temporal Tree Analysis
 For each segment, subtype, and temporal group combination:
@@ -158,8 +161,9 @@ For each segment, subtype, and temporal group combination:
 2. Reads the temporal phylogenetic tree (`temporal_trees/{temporal}_tree.pb.gz`), reference sequence, and GTF annotation
 3. Traverses the tree to count mutations at each branch for that time period
 4. Classifies mutations as synonymous or non-synonymous
-5. Outputs one file per temporal group:
+5. Outputs two files per temporal group:
    - `mutation_counts.csv` - Summary of mutations by site and type
+   - `parent_child_pairs.csv` - Detailed mutation records for each branch
 
 ### Step 3: Protein Alignment
 
@@ -334,6 +338,15 @@ Compares fitness effects between subsets:
    - Creates scatter plots of fitness effects with Pearson correlation
 2. Filters to mutations meeting the count threshold in both subsets
 
+### Step 17: Check Subset PCP Overlap
+
+Checks whether parent-child pairs (PCPs) overlap between subsets within each grouping dimension:
+1. Loads PCP files for each subset (host, geographic, temporal)
+2. For each pair of subsets within a dimension, computes:
+   - Parent-only overlap: fraction of parent sequences shared between subsets
+   - Parent+child overlap: fraction of (parent, child) pairs shared between subsets
+3. Reports counts and fractions, with the expectation that host and temporal subsets have small overlap, while geographic subsets may have substantial overlap
+
 ## Running the Pipeline
 
 Execute the full pipeline with:
@@ -406,12 +419,15 @@ The pipeline generates the following output files:
 
 3. **Host-Specific Tree Outputs**: `results/{segment}/{subtype}/{host}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific host group (same columns as global `mutation_counts.csv`)
+   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
 
 3b. **Geographic Tree Outputs**: `results/{segment}/{subtype}/{geo}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific geographic region (same columns as global `mutation_counts.csv`)
+   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
 
 3c. **Temporal Tree Outputs**: `results/{segment}/{subtype}/{temporal}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific temporal group (same columns as global `mutation_counts.csv`)
+   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
 
 4. **Aligned Proteins** (HA and NA only): `results/aligned_proteins/{segment}/`
    - Cross-subtype protein alignments
@@ -565,19 +581,26 @@ results/
 │   │   ├── mutation_counts.csv
 │   │   ├── parent_child_pairs.csv
 │   │   ├── human/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── avian/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── north_america/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── europe/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── asia/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── early/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   └── late/
-│   │       └── mutation_counts.csv
+│   │       ├── mutation_counts.csv
+│   │       └── parent_child_pairs.csv
 │   └── H3/
 │       └── ...
 ├── aligned_proteins/
@@ -615,6 +638,7 @@ results/
 ├── subset_counts.csv
 ├── subset_aa_fitness_effects.csv
 ├── .analyze_subset_fitness_effects.done
+├── .check_subset_pcp_overlap.done
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv

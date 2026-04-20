@@ -52,6 +52,27 @@ def get_subset_mutation_count_files():
 
     return files
 
+def get_subset_pcp_files():
+    """Generate list of subset parent_child_pairs.csv files (host + geographic + temporal)"""
+    files = []
+
+    for segment in config["segments"]:
+        for subtype in get_subtypes_for_segment(segment):
+            for host in config["host_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
+                )
+            for geo in config["geographic_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{geo}/parent_child_pairs.csv"
+                )
+            for temporal in config["temporal_groups"]:
+                files.append(
+                    f"{config['output_dir']}/{segment}/{subtype}/{temporal}/parent_child_pairs.csv"
+                )
+
+    return files
+
 # Generate all segment-subtype-host combinations for host-specific trees
 segment_subtype_host_combinations = []
 for segment in config["segments"]:
@@ -85,17 +106,19 @@ shapemap_segments = [s for s in config["segments"] if s not in ["HA", "NA"]]
 # Final output files
 final_outputs = []
 
-# Add host-specific mutation counts (no PCPs)
+# Add host-specific mutation counts and PCPs
 for segment, subtype, host in segment_subtype_host_combinations:
-    final_outputs.append(
-        f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
-    )
+    final_outputs.extend([
+        f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
+    ])
 
-# Add geographic mutation counts
+# Add geographic mutation counts and PCPs
 for segment, subtype, geo in segment_subtype_geo_combinations:
-    final_outputs.append(
-        f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
-    )
+    final_outputs.extend([
+        f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/{geo}/parent_child_pairs.csv"
+    ])
 
 # Add temporal mutation counts and PCPs
 for segment, subtype, temporal in segment_subtype_temporal_combinations:
@@ -178,6 +201,7 @@ final_outputs.extend([
     f"{config['output_dir']}/subset_counts.csv",
     f"{config['output_dir']}/subset_aa_fitness_effects.csv",
     f"{config['output_dir']}/.analyze_subset_fitness_effects.done",
+    f"{config['output_dir']}/.check_subset_pcp_overlap.done",
 ])
 
 # Add dashboard exports to final targets
@@ -222,7 +246,8 @@ rule count_mutations_host_trees:
         fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
-        all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv"
+        all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
     log:
         "{output_dir}/logs/{segment}/{subtype}/{host}/mutation_counts.log"
     wildcard_constraints:
@@ -234,7 +259,8 @@ rule count_mutations_host_trees:
             --coding_site_path {input.coding_site_path} \
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
-            --all_counts_path {output.all_counts_path} &> {log}
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} &> {log}
         """
 
 # Count mutations along geographic trees
@@ -245,7 +271,8 @@ rule count_mutations_geographic_trees:
         fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
-        all_counts_path="{output_dir}/{segment}/{subtype}/{geo}/mutation_counts.csv"
+        all_counts_path="{output_dir}/{segment}/{subtype}/{geo}/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/{geo}/parent_child_pairs.csv"
     log:
         "{output_dir}/logs/{segment}/{subtype}/{geo}/mutation_counts.log"
     wildcard_constraints:
@@ -257,7 +284,8 @@ rule count_mutations_geographic_trees:
             --coding_site_path {input.coding_site_path} \
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
-            --all_counts_path {output.all_counts_path} &> {log}
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} &> {log}
         """
 
 # Count mutations along temporal trees
@@ -849,6 +877,26 @@ rule analyze_subset_fitness_effects:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             analyze_subset_fitness_effects.ipynb &> ../{log}
+        """
+
+# Check for PCP overlap between subset trees
+rule check_subset_pcp_overlap:
+    input:
+        notebook="notebooks/check_subset_pcp_overlap.ipynb",
+        pcp_files=get_subset_pcp_files()
+    output:
+        touch("{output_dir}/.check_subset_pcp_overlap.done")
+    log:
+        "{output_dir}/logs/check_subset_pcp_overlap.log"
+    shell:
+        """
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            check_subset_pcp_overlap.ipynb &> ../{log}
         """
 
 # Summarize mutation filter statistics across all trees from log files
