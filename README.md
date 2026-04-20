@@ -37,7 +37,8 @@ flu-mut-rates/
 │   ├── compute_subset_rates.ipynb             # Compute rates for subset trees (host, geographic, temporal)
 │   ├── compute_subset_fitness_effects.ipynb   # Compute AA fitness effects per subset
 │   ├── analyze_subset_fitness_effects.ipynb   # Compare fitness effects between subsets
-│   └── check_subset_pcp_overlap.ipynb         # Check PCP overlap between subsets
+│   ├── check_subset_pcp_overlap.ipynb         # Check PCP overlap between subsets
+│   └── compose_figures.ipynb                  # Assemble multi-panel figures from individual PNGs
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)

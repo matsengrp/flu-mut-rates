@@ -153,6 +153,7 @@ results/
    - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
    - `analyze_subset_fitness_effects.ipynb`: Scatter plots comparing fitness effects between subsets
    - `check_subset_pcp_overlap.ipynb`: Checks PCP overlap between subsets within each grouping dimension
+   - `compose_figures.ipynb`: Assembles multi-panel manuscript figures from individual PNGs (run manually, not wired into the Snakefile pipeline)
 
 ### Pipeline Workflow
 
