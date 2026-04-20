@@ -77,19 +77,26 @@ results/
 │   │   ├── mutation_counts.csv
 │   │   ├── parent_child_pairs.csv
 │   │   ├── human/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── avian/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── north_america/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── europe/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── asia/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   ├── early/
-│   │   │   └── mutation_counts.csv
+│   │   │   ├── mutation_counts.csv
+│   │   │   └── parent_child_pairs.csv
 │   │   └── late/
-│   │       └── mutation_counts.csv
+│   │       ├── mutation_counts.csv
+│   │       └── parent_child_pairs.csv
 │   └── {H3,H5,H7,H9}/
 ├── NA/
 │   ├── N1/
@@ -145,6 +152,8 @@ results/
    - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, temporal)
    - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
    - `analyze_subset_fitness_effects.ipynb`: Scatter plots comparing fitness effects between subsets
+   - `check_subset_pcp_overlap.ipynb`: Checks PCP overlap between subsets within each grouping dimension
+   - `compose_figures.ipynb`: Assembles multi-panel manuscript figures from individual PNGs (run manually, not wired into the Snakefile pipeline)
 
 ### Pipeline Workflow
 
@@ -158,6 +167,7 @@ results/
 8. **Compute Subset Rates** → Aggregates mutation counts from subset trees (host, geographic, temporal) with a `subset` column
 9. **Compute Subset Fitness Effects** → Uses global neutral model expected rates to compute AA-level fitness effects per subset
 10. **Analyze Subset Fitness Effects** → Scatter plots comparing fitness effects between pairs of subsets
+11. **Check Subset PCP Overlap** → Verifies that parent-child pairs have minimal overlap between host and temporal subsets (geographic subsets may overlap)
 
 ### Input Requirements
 
