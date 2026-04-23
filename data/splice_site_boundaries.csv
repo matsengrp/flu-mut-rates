@@ -1,0 +1,5 @@
+segment,product,feature,position,reference
+MP,M2,5prime_splice_site,26.5,Lamb & Lai 1980 (Cell)
+MP,M2,3prime_splice_site,714.5,Lamb & Lai 1980 (Cell)
+NS,NEP,5prime_splice_site,30.5,Lamb & Lai 1980 (Virology)
+NS,NEP,3prime_splice_site,502.5,Lamb & Lai 1980 (Virology)
