@@ -224,15 +224,16 @@ Creates a complete expected rates table:
 
 ### Step 8: Compute Fitness Effects
 
-Computes fitness effects of synonymous and amino acid mutations by comparing observed mutation counts to neutral model expectations:
+Computes fitness effects of nucleotide and amino acid mutations by comparing observed mutation counts to neutral model expectations:
 1. Joins `counts.csv` with `expected_rates.csv` to compute expected counts per site under the neutral model
-2. Aggregates synonymous mutations by site and wildtype nucleotide to compute per-site synonymous fitness effects
-3. Aggregates all nucleotide mutations by resulting amino acid change to compute per-amino-acid-mutation fitness effects
-4. Fitness effects are estimated as log((actual_count + 0.5) / (expected_count + 0.5))
+2. Aggregates counts by nucleotide mutation to compute per-nucleotide-mutation fitness effects as log((actual_count + 0.5) / (expected_count + 0.5))
+3. Computes per-site synonymous fitness effects as the mean of per-nucleotide-mutation `delta_fitness` values across synonymous mutations at each site
+4. Aggregates all nucleotide mutations by resulting amino acid change to compute per-amino-acid-mutation fitness effects as log((actual_count + 0.5) / (expected_count + 0.5))
 
-Outputs three CSV files at the results root:
+Outputs four CSV files at the results root:
 - `actual_expected.csv` - Per-mutation counts joined with neutral model expected counts
-- `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
+- `nt_fitness_effects.csv` - Per-nucleotide-mutation fitness effects
+- `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects (mean of per-nucleotide-mutation effects)
 - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
 
 ### Step 9: Process SHAPE-MaP Data
@@ -511,6 +512,20 @@ Located in the `results/` root directory:
      - Columns: same as `counts.csv`, plus:
        - `predicted_rate` — neutral model predicted rate for this mutation type/motif/segment (from `expected_rates.csv`)
        - `expected_count` — expected number of observations under the neutral model (`predicted_rate × evo_opp`)
+   - `nt_fitness_effects.csv` - Per-nucleotide-mutation fitness effects
+     - Columns:
+       - `host` — host group (`"human"`, `"avian"`, or `"all"`)
+       - `subtype` — influenza subtype (e.g. `"H1"`, `"N2"`, or `"all"`)
+       - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
+       - `gene` — gene containing the site
+       - `site` — nucleotide position in the reference sequence (1-indexed)
+       - `wt_nt` — wildtype nucleotide
+       - `mut_nt` — mutant nucleotide
+       - `nt_mut` — nucleotide mutation string (e.g. `"A1C"`)
+       - `mut_class` — mutation class (`"synonymous"`, `"nonsynonymous"`, `"nonsense"`, or `"noncoding"`)
+       - `actual_count` — total observed occurrences of this nucleotide mutation
+       - `expected_count` — total expected occurrences under the neutral model
+       - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
    - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects
      - Columns:
        - `host` — host group (`"human"`, `"avian"`, or `"all"`)
@@ -518,11 +533,7 @@ Located in the `results/` root directory:
        - `segment` — genome segment (e.g. `"HA"`, `"PB2"`)
        - `gene` — gene containing the site
        - `site` — nucleotide position in the reference sequence (1-indexed)
-       - `codon_site` — index of the codon within the gene (1-indexed)
-       - `wt_nt` — wildtype nucleotide at this site
-       - `actual_count` — total observed synonymous mutations away from `wt_nt` at this site
-       - `expected_count` — total expected synonymous mutations under the neutral model
-       - `delta_fitness` — estimated fitness effect: log((actual_count + 0.5) / (expected_count + 0.5))
+       - `delta_fitness` — estimated fitness effect: mean of per-nucleotide-mutation `delta_fitness` values (from `nt_fitness_effects.csv`) across synonymous mutations at this site
    - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
      - Columns:
        - `host` — host group (`"human"`, `"avian"`, or `"all"`)
@@ -615,6 +626,7 @@ results/
 ├── site_specific_mutation_rates.csv
 ├── expected_rates.csv
 ├── actual_expected.csv
+├── nt_fitness_effects.csv
 ├── sitewise_synonymous_fitness_effects.csv
 ├── aa_fitness_effects.csv
 ├── shapemap/
