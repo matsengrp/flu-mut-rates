@@ -42,6 +42,7 @@ flu-mut-rates/
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)
+│   ├── splice_site_boundaries.csv       # Canonical M2 and NEP splice-site coordinates (from Lamb & Lai 1980)
 │   ├── HA/
 │   │   ├── H1/
 │   │   │   ├── curated_root.fasta
@@ -300,7 +301,7 @@ Executes an analysis notebook that:
 
 Executes an analysis notebook that:
 1. Plots distributions of fitness effects by mutation class across all genes
-2. Examines synonymous fitness effects across genome sites
+2. Examines per-site synonymous fitness effects across the genome, with overlays highlighting regions under non-coding selection: packaging signals at vRNA termini (from `data/packaging_signal_boundaries.csv`), the PA-X alternative ORF on segment PA, and canonical splice sites for M2 (MP) and NEP (NS) (from `data/splice_site_boundaries.csv`). Splice-site positions are stored as half-integer midpoints (e.g. 26.5) because splice events cut between two adjacent nucleotides rather than at a single site; the half-integer places the rendered vertical marker between the flanking sites on the figure
 3. Compares evolutionary fitness effects to experimentally measured DMS effects for seven proteins: HA/H3 (Yu et al. 2025), NP (Bloom et al. 2014), M1 (Hom et al. 2019), NEP (Teo et al. 2024), PB1 (Li et al. 2023), PB2 (Soh et al. 2019), and NA/N1 (Wang et al. 2023)
 
 ### Step 13: Summarize Mutation Filter Logs
