@@ -111,6 +111,18 @@ data_dir: "../flu-usher/results"
 output_dir: "results"
 ```
 
+### Input data files
+
+Two CSV tables in `data/` define regions of the genome that are under additional non-neutral constraint on otherwise-synonymous mutations. They are consumed by `notebooks/compute_rates.ipynb` (to build the `exclude_from_mut_rate_analysis` flag used during rate aggregation and neutral-model fitting; see Step 4) and by `notebooks/analyze_fitness_effects.ipynb` (to overlay the affected regions on per-site fitness-effect plots; see Step 12).
+
+**`data/packaging_signal_boundaries.csv`** — length of each segment's packaging signal at either vRNA terminus.
+- **Columns:** `segment`, `end` (`3prime_vRNA` or `5prime_vRNA`), `nt` (packaging-signal length in nucleotides), `reference` (literature source).
+- **Interpretation:** site coordinates in the pipeline are CDS-based and 1-indexed, running 5′→3′ along the positive-sense mRNA. The `3prime_vRNA` end corresponds to the CDS start, so a value `n3` flags CDS sites `[1, n3]`. The `5prime_vRNA` end corresponds to the CDS end, so a value `n5` flags CDS sites `[cds_len − n5 + 1, cds_len]`, where `cds_len` is the segment's CDS length (available from `results/{segment}/{subtype}/coding_sites.csv`). An `nt` value of 0 means no packaging signal is annotated at that terminus (e.g. PB2 at the 3′ vRNA end).
+
+**`data/splice_site_boundaries.csv`** — canonical M2 (MP segment) and NEP (NS segment) splice junctions.
+- **Columns:** `segment`, `product` (`M2` or `NEP`), `feature` (`5prime_splice_site` or `3prime_splice_site`), `position` (half-integer CDS coordinate), `reference`.
+- **Interpretation:** positions are half-integers (e.g. `26.5`) because splicing cuts *between* two adjacent nucleotides rather than at a single site; the half-integer places the junction between sites `floor(position)` and `ceil(position)`. Rate aggregation (Step 4) flags a 10-nt window `|site − position| ≤ 5` around each junction (e.g. position `26.5` → sites 22–31); the fitness-effect overlays (Step 12) draw a vertical marker at the half-integer coordinate so the marker sits between the two flanking sites.
+
 ## Pipeline Steps
 
 ### Step 1: Coding Sites Identification

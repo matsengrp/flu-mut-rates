@@ -31,9 +31,14 @@ def load_synonymous_muts(subtype=None):
     # Read in curated dataset. Unfortunately "NA" is a segment name.
     df = pd.read_csv("results/site_specific_mutation_rates.csv", keep_default_na=False)
 
-    # Filter to synonymous mutations with full-length motifs from aggregated host data
+    # Filter to synonymous mutations with full-length motifs from aggregated host data,
+    # and drop sites in regions where synonymous rates are not a good neutral reference
+    # (packaging signals and canonical splice junctions; flagged in compute_rates.ipynb).
     # Note: All synonymous mutations in the input already have 3-mer motifs
-    query = "mut_class=='synonymous' and motif.str.len()==3 and host=='all'"
+    query = (
+        "mut_class=='synonymous' and motif.str.len()==3 "
+        "and host=='all' and not exclude_from_mut_rate_analysis"
+    )
     df.query(query, inplace=True)
 
     return df
