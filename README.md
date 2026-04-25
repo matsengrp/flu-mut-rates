@@ -43,6 +43,7 @@ flu-mut-rates/
 ├── data/                 # Input data (organized by segment, subtype, and host)
 │   ├── packaging_signal_boundaries.csv  # Packaging signal boundaries per segment (from Li et al. 2021)
 │   ├── splice_site_boundaries.csv       # Canonical M2 and NEP splice-site coordinates (from Lamb & Lai 1980)
+│   ├── alternative_orf_boundaries.csv   # Alternative-frame ORFs that overlap the main CDS (PA-X, Jagger et al. 2012)
 │   ├── HA/
 │   │   ├── H1/
 │   │   │   ├── curated_root.fasta
@@ -113,7 +114,7 @@ output_dir: "results"
 
 ### Input data files
 
-Two CSV tables in `data/` define regions of the genome that are under additional non-neutral constraint on otherwise-synonymous mutations. They are consumed by `notebooks/compute_rates.ipynb` (to build the `exclude_from_mut_rate_analysis` flag used during rate aggregation and neutral-model fitting; see Step 4) and by `notebooks/analyze_fitness_effects.ipynb` (to overlay the affected regions on per-site fitness-effect plots; see Step 12).
+Three CSV tables in `data/` define regions of the genome that are under additional non-neutral constraint on otherwise-synonymous mutations. They are consumed by `notebooks/compute_rates.ipynb` (to build the `exclude_from_mut_rate_analysis` flag used during rate aggregation and neutral-model fitting; see Step 4) and by `notebooks/analyze_fitness_effects.ipynb` (to overlay the affected regions on per-site fitness-effect plots; see Step 12).
 
 **`data/packaging_signal_boundaries.csv`** — length of each segment's packaging signal at either vRNA terminus.
 - **Columns:** `segment`, `end` (`3prime_vRNA` or `5prime_vRNA`), `nt` (packaging-signal length in nucleotides), `reference` (literature source).
@@ -122,6 +123,10 @@ Two CSV tables in `data/` define regions of the genome that are under additional
 **`data/splice_site_boundaries.csv`** — canonical M2 (MP segment) and NEP (NS segment) splice junctions.
 - **Columns:** `segment`, `product` (`M2` or `NEP`), `feature` (`5prime_splice_site` or `3prime_splice_site`), `position` (half-integer CDS coordinate), `reference`.
 - **Interpretation:** positions are half-integers (e.g. `26.5`) because splicing cuts *between* two adjacent nucleotides rather than at a single site; the half-integer places the junction between sites `floor(position)` and `ceil(position)`. Rate aggregation (Step 4) flags a 10-nt window `|site − position| ≤ 5` around each junction (e.g. position `26.5` → sites 22–31); the fitness-effect overlays (Step 12) draw a vertical marker at the half-integer coordinate so the marker sits between the two flanking sites.
+
+**`data/alternative_orf_boundaries.csv`** — alternative-frame ORFs that overlap a segment's main CDS, where mutations that look synonymous in the main CDS may be non-synonymous in the overlapping ORF. Currently lists PA-X on the PA segment.
+- **Columns:** `segment`, `product` (e.g. `PA-X`), `start`, `end` (1-indexed, inclusive nucleotide positions in the segment CDS, same coordinate system as `counts_df['site']`), `reference`.
+- **Interpretation:** rate aggregation (Step 4) flags every site `s` with `start ≤ s ≤ end`. PA-X is a +1-frame ribosomal-frameshift product of PA: the first 570 nt are shared with PA in-frame, and the unique X portion spans nt 572–760. Only the unique frameshifted portion is listed here.
 
 ## Pipeline Steps
 
@@ -313,7 +318,7 @@ Executes an analysis notebook that:
 
 Executes an analysis notebook that:
 1. Plots distributions of fitness effects by mutation class across all genes
-2. Examines per-site synonymous fitness effects across the genome, with overlays highlighting regions under non-coding selection: packaging signals at vRNA termini (from `data/packaging_signal_boundaries.csv`), the PA-X alternative ORF on segment PA, and canonical splice sites for M2 (MP) and NEP (NS) (from `data/splice_site_boundaries.csv`). Splice-site positions are stored as half-integer midpoints (e.g. 26.5) because splice events cut between two adjacent nucleotides rather than at a single site; the half-integer places the rendered vertical marker between the flanking sites on the figure
+2. Examines per-site synonymous fitness effects across the genome, with overlays highlighting regions under non-coding selection: packaging signals at vRNA termini (from `data/packaging_signal_boundaries.csv`), alternative-frame ORFs that overlap the main CDS such as PA-X on segment PA (from `data/alternative_orf_boundaries.csv`), and canonical splice sites for M2 (MP) and NEP (NS) (from `data/splice_site_boundaries.csv`). Splice-site positions are stored as half-integer midpoints (e.g. 26.5) because splice events cut between two adjacent nucleotides rather than at a single site; the half-integer places the rendered vertical marker between the flanking sites on the figure
 3. Compares evolutionary fitness effects to experimentally measured DMS effects for seven proteins: HA/H3 (Yu et al. 2025), NP (Bloom et al. 2014), M1 (Hom et al. 2019), NEP (Teo et al. 2024), PB1 (Li et al. 2023), PB2 (Soh et al. 2019), and NA/N1 (Wang et al. 2023)
 
 ### Step 13: Summarize Mutation Filter Logs
