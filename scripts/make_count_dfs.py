@@ -380,6 +380,8 @@ class CountsHelper:
 
         # Aggregate the counts and branch lengths across all nodes
         all_pcps_df = self.pcp_list_to_df(all_pcps)
+        if self.node_host is not None:
+            all_pcps_df['host'] = all_pcps_df['parent_name'].map(self.node_host)
 
         return n_passing_filters, all_counts_df, all_pcps_df, aggregate_stats
 
