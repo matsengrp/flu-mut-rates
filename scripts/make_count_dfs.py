@@ -146,31 +146,30 @@ class CountsHelper:
             max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
 
-        # If host stratification is active, every parent must have an unambiguous
-        # host classification in the TSV. Parents whose host is unambiguous but not
-        # in the configured host_groups are silently skipped.
+        # If host stratification is active:
+        #  - Ambiguous parents (multiple host states in the TSV) are silently skipped.
+        #  - Parents missing from the TSV entirely are an error.
+        #  - Parents with an unambiguous host outside host_groups are silently skipped.
         parent_host = None
         if self.node_host is not None:
+            empty_filter_stats = {
+                'total_branches': 0,
+                'passing_branches': 0,
+                'total_mutations': 0,
+                'passing_mutations': 0,
+                'filtered_by_too_many': 0,
+                'filtered_by_zero': 0,
+                'filtered_by_duplicates': 0,
+            }
+            if parent.id in self.ambiguous_nodes:
+                return 0, pd.DataFrame(), (parent.id, "", []), empty_filter_stats
             parent_host = self.node_host.get(parent.id)
             if parent_host is None:
-                if parent.id in self.ambiguous_nodes:
-                    raise ValueError(
-                        f"Parent node {parent.id!r} has ambiguous host annotation "
-                        f"(appears multiple times in the host TSV)."
-                    )
                 raise ValueError(
                     f"Parent node {parent.id!r} is missing from the host TSV."
                 )
             if self.host_groups is not None and parent_host not in self.host_groups:
-                return 0, pd.DataFrame(), (parent.id, "", []), {
-                    'total_branches': 0,
-                    'passing_branches': 0,
-                    'total_mutations': 0,
-                    'passing_mutations': 0,
-                    'filtered_by_too_many': 0,
-                    'filtered_by_zero': 0,
-                    'filtered_by_duplicates': 0,
-                }
+                return 0, pd.DataFrame(), (parent.id, "", []), empty_filter_stats
 
         # Get the set of mutations in the partent node relative to the reference
         parent_node_haplotype = self.tree.get_haplotype(parent.id)
@@ -221,10 +220,18 @@ class CountsHelper:
         # the branch going to each child, if the branch passes the filters
         n_passing_filters = 0
         for node in parent.children:
-            # When host stratification is active, only count branches whose child
-            # has the same unambiguous host as the parent.
+            # When host stratification is active:
+            #  - Skip ambiguous children silently.
+            #  - Error on children missing from the TSV.
+            #  - Only count branches whose child shares the parent's host.
             if self.node_host is not None:
+                if node.id in self.ambiguous_nodes:
+                    continue
                 child_host = self.node_host.get(node.id)
+                if child_host is None:
+                    raise ValueError(
+                        f"Child node {node.id!r} is missing from the host TSV."
+                    )
                 if child_host != parent_host:
                     continue
 
