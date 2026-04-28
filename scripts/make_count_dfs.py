@@ -33,7 +33,8 @@ class CountsHelper:
         tree_path,
         coding_site_path,
         fasta_path,
-        gtf_path
+        gtf_path,
+        host_tsv_path=None,
     ):
         """
         Parameters:
@@ -42,6 +43,11 @@ class CountsHelper:
                 and gene).
             fasta_path (str): The fasta for the reference sequence.
             gtf_path (str):
+            host_tsv_path (str): Optional path to a TSV with columns 'node' and
+                'host_group' giving the host classification of each node (internal and
+                leaf). When provided, only branches whose parent and child have matching
+                unambiguous host classifications are counted, and the output gains a
+                'host' column.
         """
 
         # Given the reference sequence and the a table of coding sites, initialize a
@@ -62,6 +68,23 @@ class CountsHelper:
         self.int_nodes = [n for n in self.nodes if not n.is_leaf()]
         self.n_nodes = len(self.nodes)
         self.n_int_nodes = len(self.int_nodes)
+
+        # Optional host annotation: drop ambiguous nodes (those appearing >1x).
+        self.node_host = (
+            self._load_host_tsv(host_tsv_path) if host_tsv_path else None
+        )
+
+    @staticmethod
+    def _load_host_tsv(path):
+        df = pd.read_csv(path, sep="\t")
+        counts = df["node"].value_counts()
+        ambiguous = counts[counts > 1].index
+        unambiguous = df[~df["node"].isin(ambiguous)]
+        print(
+            f"Loaded host TSV {path}: {len(unambiguous)} unambiguous nodes, "
+            f"{len(ambiguous)} ambiguous nodes dropped."
+        )
+        return dict(zip(unambiguous["node"], unambiguous["host_group"]))
 
     def ref_motif(self, s):
         """Return the 3-mer motif centered at the site. Site indices begin at one."""
@@ -113,6 +136,23 @@ class CountsHelper:
             max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
 
+        empty_filter_stats = {
+            'total_branches': 0,
+            'passing_branches': 0,
+            'total_mutations': 0,
+            'passing_mutations': 0,
+            'filtered_by_too_many': 0,
+            'filtered_by_zero': 0,
+            'filtered_by_duplicates': 0,
+        }
+
+        # If host stratification is active, skip parents without an unambiguous host.
+        parent_host = None
+        if self.node_host is not None:
+            parent_host = self.node_host.get(parent.id)
+            if parent_host is None:
+                return 0, pd.DataFrame(), (parent.id, "", []), empty_filter_stats
+
         # Get the set of mutations in the partent node relative to the reference
         parent_node_haplotype = self.tree.get_haplotype(parent.id)
         p_muts = {int(mut[1:-1]): mut[-1] for mut in parent_node_haplotype}
@@ -148,20 +188,19 @@ class CountsHelper:
         n_passing_muts = 0
 
         # Initialize filter statistics
-        filter_stats = {
-            'total_branches': 0,
-            'passing_branches': 0,
-            'total_mutations': 0,
-            'passing_mutations': 0,
-            'filtered_by_too_many': 0,
-            'filtered_by_zero': 0,
-            'filtered_by_duplicates': 0
-        }
+        filter_stats = dict(empty_filter_stats)
 
         # Iterate over the children of the parent node, and count mutations on
         # the branch going to each child, if the branch passes the filters
         n_passing_filters = 0
         for node in parent.children:
+            # When host stratification is active, only count branches whose child
+            # has the same unambiguous host as the parent.
+            if self.node_host is not None:
+                child_host = self.node_host.get(node.id)
+                if child_host != parent_host:
+                    continue
+
             nt_muts = node.mutations
             codon_muts = self.translations[node.id]
             num_muts = len(nt_muts)
@@ -202,6 +241,9 @@ class CountsHelper:
         # each nucleotide mutation affects a distinct codon and can be classified
         # independently as synonymous or non-synonymous.
         counts_df["syn_branch_length"] = counts_df[counts_df['wt_aa'] == counts_df['mut_aa']]['actual_count'].sum()
+
+        if self.node_host is not None:
+            counts_df["host"] = parent_host
 
         return n_passing_filters, counts_df, pcps, filter_stats
 
@@ -245,7 +287,8 @@ class CountsHelper:
                 aggregate_stats[key] += filter_stats[key]
 
             # Skip the internal node if no branches to its children passed the filters
-            if counts_df['branch_length'].sum() == 0:
+            # (or, when host stratification is on, if the parent had no unambiguous host)
+            if counts_df.empty or counts_df['branch_length'].sum() == 0:
                 continue
 
             # Add PCPs to the big list for the whole tree
@@ -263,6 +306,8 @@ class CountsHelper:
                     'wt_codon', 'mut_codon', 'wt_aa', 'mut_aa',
                     'aa_mut', 'parent_motif'
                 ]
+                if self.node_host is not None:
+                    cols.append('host')
                 all_counts_df = (
                     pd.concat([all_counts_df, counts_df])
                     .groupby(cols, as_index=False)
@@ -399,16 +444,18 @@ def main():
     parser.add_argument('--gtf_path', required=True, help='Path to GTF annotation file')
     parser.add_argument('--all_counts_path', required=True, help='Output path for mutation counts CSV')
     parser.add_argument('--all_pcps_path', required=False, default=None, help='Output path for parent-child pairs CSV (optional)')
-    
+    parser.add_argument('--host_tsv', required=False, default=None, help='Optional TSV mapping node IDs to host_group; enables host-stratified counts')
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     # Initialize an instance of CountsHelper
     counts_helper = CountsHelper(
         args.tree_path,
         args.coding_site_path,
         args.fasta_path,
-        args.gtf_path
+        args.gtf_path,
+        host_tsv_path=args.host_tsv,
     )
     
     # Compute counts and write them to files

@@ -134,6 +134,13 @@ for segment, subtype in segment_subtype_combinations:
         f"{config['output_dir']}/{segment}/{subtype}/parent_child_pairs.csv"
     ])
 
+# Add host-stratified mutation counts and PCPs (global tree + host TSV)
+for segment, subtype in segment_subtype_combinations:
+    final_outputs.extend([
+        f"{config['output_dir']}/{segment}/{subtype}/host_stratified/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
+    ])
+
 # Add aligned proteins outputs (only for HA and NA segments)
 final_outputs.extend(expand(
     "{output_dir}/aligned_proteins/{segment}",
@@ -309,6 +316,32 @@ rule count_mutations_temporal_trees:
             --coding_site_path {input.coding_site_path} \
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} &> {log}
+        """
+
+# Count mutations along the global tree, stratified by host using ancestral-state TSV.
+# Only branches whose parent and child share the same unambiguous host are counted.
+rule count_mutations_host_stratified:
+    input:
+        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree.pb.gz",
+        coding_site_path=rules.make_coding_sites.output.coding_sites,
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf",
+        host_tsv=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/host_ancestral/combined_ancestral_states.tab"
+    output:
+        all_counts_path="{output_dir}/{segment}/{subtype}/host_stratified/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
+    log:
+        "{output_dir}/logs/{segment}/{subtype}/host_stratified/mutation_counts.log"
+    shell:
+        """
+        python scripts/make_count_dfs.py \
+            --tree_path {input.tree_path} \
+            --coding_site_path {input.coding_site_path} \
+            --fasta_path {input.fasta_path} \
+            --gtf_path {input.gtf_path} \
+            --host_tsv {input.host_tsv} \
             --all_counts_path {output.all_counts_path} \
             --all_pcps_path {output.all_pcps_path} &> {log}
         """
