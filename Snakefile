@@ -321,7 +321,8 @@ rule count_mutations_temporal_trees:
         """
 
 # Count mutations along the global tree, stratified by host using ancestral-state TSV.
-# Only branches whose parent and child share the same unambiguous host are counted.
+# Only branches whose parent and child share the same unambiguous host are counted,
+# and the output is restricted to the host labels listed in config["host_groups"].
 rule count_mutations_host_stratified:
     input:
         tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree.pb.gz",
@@ -334,6 +335,8 @@ rule count_mutations_host_stratified:
         all_pcps_path="{output_dir}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
     log:
         "{output_dir}/logs/{segment}/{subtype}/host_stratified/mutation_counts.log"
+    params:
+        host_groups=" ".join(config["host_groups"])
     shell:
         """
         python scripts/make_count_dfs.py \
@@ -342,6 +345,7 @@ rule count_mutations_host_stratified:
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
             --host_tsv {input.host_tsv} \
+            --host_groups {params.host_groups} \
             --all_counts_path {output.all_counts_path} \
             --all_pcps_path {output.all_pcps_path} &> {log}
         """
