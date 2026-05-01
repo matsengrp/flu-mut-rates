@@ -11,7 +11,8 @@ def get_subtypes_for_segment(segment):
         return ["all"]
 
 def get_all_mutation_count_files():
-    """Generate list of all mutation_counts.csv files (global + host-specific)"""
+    """Generate list of mutation_counts.csv files for the global tree and the
+    host-stratified output (one file per segment/subtype, with a host column)."""
     files = []
 
     # Global mutation counts (no subdirectory)
@@ -21,26 +22,26 @@ def get_all_mutation_count_files():
                 f"{config['output_dir']}/{segment}/{subtype}/mutation_counts.csv"
             )
 
-    # Host-specific mutation counts
+    # Host-stratified mutation counts (single file per tree with a host column)
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
-            for host in config["host_groups"]:
-                files.append(
-                    f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
-                )
+            files.append(
+                f"{config['output_dir']}/{segment}/{subtype}/host_stratified/mutation_counts.csv"
+            )
 
     return files
 
 def get_subset_mutation_count_files():
-    """Generate list of subset mutation_counts.csv files (host + geographic + temporal)"""
+    """Generate list of subset mutation_counts.csv files for downstream subset rates.
+    The host dimension is supplied by the single host_stratified file (with a host
+    column); geographic and temporal dimensions still come from per-subset trees."""
     files = []
 
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
-            for host in config["host_groups"]:
-                files.append(
-                    f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv"
-                )
+            files.append(
+                f"{config['output_dir']}/{segment}/{subtype}/host_stratified/mutation_counts.csv"
+            )
             for geo in config["geographic_groups"]:
                 files.append(
                     f"{config['output_dir']}/{segment}/{subtype}/{geo}/mutation_counts.csv"
@@ -53,15 +54,16 @@ def get_subset_mutation_count_files():
     return files
 
 def get_subset_pcp_files():
-    """Generate list of subset parent_child_pairs.csv files (host + geographic + temporal)"""
+    """Generate list of subset parent_child_pairs.csv files. The host dimension is
+    supplied by the single host_stratified file (with a host column); geographic and
+    temporal dimensions still come from per-subset trees."""
     files = []
 
     for segment in config["segments"]:
         for subtype in get_subtypes_for_segment(segment):
-            for host in config["host_groups"]:
-                files.append(
-                    f"{config['output_dir']}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
-                )
+            files.append(
+                f"{config['output_dir']}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
+            )
             for geo in config["geographic_groups"]:
                 files.append(
                     f"{config['output_dir']}/{segment}/{subtype}/{geo}/parent_child_pairs.csv"
@@ -72,13 +74,6 @@ def get_subset_pcp_files():
                 )
 
     return files
-
-# Generate all segment-subtype-host combinations for host-specific trees
-segment_subtype_host_combinations = []
-for segment in config["segments"]:
-    for subtype in get_subtypes_for_segment(segment):
-        for host in config["host_groups"]:
-            segment_subtype_host_combinations.append((segment, subtype, host))
 
 # Generate all segment-subtype-geographic combinations for geographic trees
 segment_subtype_geo_combinations = []
@@ -106,13 +101,6 @@ shapemap_segments = [s for s in config["segments"] if s not in ["HA", "NA"]]
 # Final output files
 final_outputs = []
 
-# Add host-specific mutation counts and PCPs
-for segment, subtype, host in segment_subtype_host_combinations:
-    final_outputs.extend([
-        f"{config['output_dir']}/{segment}/{subtype}/{host}/mutation_counts.csv",
-        f"{config['output_dir']}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
-    ])
-
 # Add geographic mutation counts and PCPs
 for segment, subtype, geo in segment_subtype_geo_combinations:
     final_outputs.extend([
@@ -132,6 +120,13 @@ for segment, subtype in segment_subtype_combinations:
     final_outputs.extend([
         f"{config['output_dir']}/{segment}/{subtype}/mutation_counts.csv",
         f"{config['output_dir']}/{segment}/{subtype}/parent_child_pairs.csv"
+    ])
+
+# Add host-stratified mutation counts and PCPs (global tree + host TSV)
+for segment, subtype in segment_subtype_combinations:
+    final_outputs.extend([
+        f"{config['output_dir']}/{segment}/{subtype}/host_stratified/mutation_counts.csv",
+        f"{config['output_dir']}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
     ])
 
 # Add aligned proteins outputs (only for HA and NA segments)
@@ -238,31 +233,6 @@ rule make_coding_sites:
             --ignore_genes {params.ignore_genes} &> {log}
         """
 
-# Count mutations along host-specific trees
-rule count_mutations_host_trees:
-    input:
-        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/host_specific_trees/{wildcards.host}_tree.pb.gz",
-        coding_site_path=rules.make_coding_sites.output.coding_sites,
-        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
-        gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
-    output:
-        all_counts_path="{output_dir}/{segment}/{subtype}/{host}/mutation_counts.csv",
-        all_pcps_path="{output_dir}/{segment}/{subtype}/{host}/parent_child_pairs.csv"
-    log:
-        "{output_dir}/logs/{segment}/{subtype}/{host}/mutation_counts.log"
-    wildcard_constraints:
-        host="|".join(config["host_groups"])
-    shell:
-        """
-        python scripts/make_count_dfs.py \
-            --tree_path {input.tree_path} \
-            --coding_site_path {input.coding_site_path} \
-            --fasta_path {input.fasta_path} \
-            --gtf_path {input.gtf_path} \
-            --all_counts_path {output.all_counts_path} \
-            --all_pcps_path {output.all_pcps_path} &> {log}
-        """
-
 # Count mutations along geographic trees
 rule count_mutations_geographic_trees:
     input:
@@ -309,6 +279,36 @@ rule count_mutations_temporal_trees:
             --coding_site_path {input.coding_site_path} \
             --fasta_path {input.fasta_path} \
             --gtf_path {input.gtf_path} \
+            --all_counts_path {output.all_counts_path} \
+            --all_pcps_path {output.all_pcps_path} &> {log}
+        """
+
+# Count mutations along the global tree, stratified by host using ancestral-state TSV.
+# Only branches whose parent and child share the same unambiguous host are counted,
+# and the output is restricted to the host labels listed in config["host_groups"].
+rule count_mutations_host_stratified:
+    input:
+        tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree.pb.gz",
+        coding_site_path=rules.make_coding_sites.output.coding_sites,
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf",
+        host_tsv=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/host_ancestral/combined_ancestral_states.tab"
+    output:
+        all_counts_path="{output_dir}/{segment}/{subtype}/host_stratified/mutation_counts.csv",
+        all_pcps_path="{output_dir}/{segment}/{subtype}/host_stratified/parent_child_pairs.csv"
+    log:
+        "{output_dir}/logs/{segment}/{subtype}/host_stratified/mutation_counts.log"
+    params:
+        host_groups=" ".join(config["host_groups"])
+    shell:
+        """
+        python scripts/make_count_dfs.py \
+            --tree_path {input.tree_path} \
+            --coding_site_path {input.coding_site_path} \
+            --fasta_path {input.fasta_path} \
+            --gtf_path {input.gtf_path} \
+            --host_tsv {input.host_tsv} \
+            --host_groups {params.host_groups} \
             --all_counts_path {output.all_counts_path} \
             --all_pcps_path {output.all_pcps_path} &> {log}
         """
