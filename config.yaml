@@ -33,9 +33,14 @@ geographic_groups:
   - "europe"
   - "asia"
 
-temporal_groups:
-  - "early"
-  - "late"
+# Random branch-partition robustness check: split each global tree's passing
+# branches into two halves and compute rates / fitness effects for each half
+# independently. The two splits are surfaced downstream as subset_type='split_half'.
+split_half_groups:
+  - "split_a"
+  - "split_b"
+
+split_half_seed: 42
 
 # Data directory paths
 data_dir: "../flu-usher/results"

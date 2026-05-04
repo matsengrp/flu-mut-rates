@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from collections import defaultdict, Counter
 import bte
 from ExpectedCalc import PossibleMutations, apply_muts
@@ -36,6 +37,7 @@ class CountsHelper:
         gtf_path,
         host_tsv_path=None,
         host_groups=None,
+        partition_seed=None,
     ):
         """
         Parameters:
@@ -52,6 +54,12 @@ class CountsHelper:
             host_groups (iterable[str] or None): Optional set of host labels to keep.
                 Branches whose parent's host is not in this set are silently skipped, so
                 the output contains rows only for the listed hosts.
+            partition_seed (int or None): Optional seed enabling a random split-half
+                partition. When set, every passing branch is independently routed to
+                'split_a' or 'split_b' by a coin flip seeded with this value, and the
+                helper produces three parallel mutation-count DataFrames (full / split_a
+                / split_b) using a single tree traversal. PCPs are tracked only for the
+                full tree.
         """
 
         # Given the reference sequence and the a table of coding sites, initialize a
@@ -83,6 +91,14 @@ class CountsHelper:
             self.ambiguous_nodes = set()
 
         self.host_groups = set(host_groups) if host_groups else None
+
+        self.partition_seed = partition_seed
+        self.partition_rng = (
+            np.random.RandomState(partition_seed) if partition_seed is not None else None
+        )
+        self.partition_names = (
+            ("split_a", "split_b") if self.partition_rng is not None else ()
+        )
 
     @staticmethod
     def _load_host_tsv(path):
@@ -133,13 +149,11 @@ class CountsHelper:
     def count_mutations_from_parent(self, parent, max_mutations=4):
         """
         Count mutations from the parent node to all of its child nodes. Return four
-        values, which are the number of child nodes that pass the filter;
-        a Counter mapping a tuple of values for self.key_names to the number of times
-        the associating mutation type occured; a Counter mapping a tuple of values for
-        self.key_names to the sum of branch lengths where the mutation type is possible;
-        a list of parent child pairs, where each entry is a triple with of the
-        parent node id, the parent node sequence, and a list of pairs of child node id
-        and child node sequence; and a dictionary of filter statistics.
+        values: the number of child nodes that pass the filter; a dict keyed by partition
+        name ('full' always present, 'split_a' and 'split_b' when partitioning is on)
+        mapping to a counts DataFrame for that partition; a triple of (parent_id,
+        parent_seq, list of (child_id, child_mutations)) for all PCPs that passed the
+        filter; and a dictionary of filter statistics.
 
         Parameters:
             parent: Parent node to process.
@@ -161,15 +175,19 @@ class CountsHelper:
                 'filtered_by_zero': 0,
                 'filtered_by_duplicates': 0,
             }
+            empty_partition_dfs = {
+                name: pd.DataFrame()
+                for name in ("full",) + self.partition_names
+            }
             if parent.id in self.ambiguous_nodes:
-                return 0, pd.DataFrame(), (parent.id, "", []), empty_filter_stats
+                return 0, empty_partition_dfs, (parent.id, "", []), empty_filter_stats
             parent_host = self.node_host.get(parent.id)
             if parent_host is None:
                 raise ValueError(
                     f"Parent node {parent.id!r} is missing from the host TSV."
                 )
             if self.host_groups is not None and parent_host not in self.host_groups:
-                return 0, pd.DataFrame(), (parent.id, "", []), empty_filter_stats
+                return 0, empty_partition_dfs, (parent.id, "", []), empty_filter_stats
 
         # Get the set of mutations in the partent node relative to the reference
         parent_node_haplotype = self.tree.get_haplotype(parent.id)
@@ -202,6 +220,12 @@ class CountsHelper:
             return m if len(m) == 3 else pd.NA
         counts_df["parent_motif"] = counts_df.site.apply(parent_motif)
         counts_df["actual_count"] = 0
+        # When partitioning is active, each split gets its own counts DataFrame that
+        # shares site/codon/motif metadata with the full counts but tracks an
+        # independent actual_count.
+        partition_dfs = {"full": counts_df}
+        for name in self.partition_names:
+            partition_dfs[name] = counts_df.copy()
         pcps = (parent.id, parent_seq, [])
         n_passing_muts = 0
 
@@ -264,34 +288,42 @@ class CountsHelper:
             n_passing_muts += len(nt_muts)
             to_increment = counts_df.query("nt_mut.isin(@node.mutations)").index
             counts_df.loc[to_increment, "actual_count"] += 1
+            if self.partition_rng is not None:
+                split = self.partition_names[self.partition_rng.randint(2)]
+                partition_dfs[split].loc[to_increment, "actual_count"] += 1
 
-        branch_length = counts_df['actual_count'].sum()
-        assert branch_length == n_passing_muts, \
-            f"branch_length ({branch_length}) != n_passing_muts ({n_passing_muts})"
-        counts_df["branch_length"] = branch_length
-        
+        # Finalize each partition's branch_length / syn_branch_length / host columns.
         # Count synonymous mutations by checking wt_aa == mut_aa. This is valid because
         # we already filtered out branches where two mutations target the same codon, so
         # each nucleotide mutation affects a distinct codon and can be classified
         # independently as synonymous or non-synonymous.
-        counts_df["syn_branch_length"] = counts_df[counts_df['wt_aa'] == counts_df['mut_aa']]['actual_count'].sum()
+        for name, df in partition_dfs.items():
+            bl = df['actual_count'].sum()
+            df["branch_length"] = bl
+            df["syn_branch_length"] = df[df['wt_aa'] == df['mut_aa']]['actual_count'].sum()
+            if self.node_host is not None:
+                df["host"] = parent_host
 
-        if self.node_host is not None:
-            counts_df["host"] = parent_host
+        full_branch_length = partition_dfs["full"]['actual_count'].sum()
+        assert full_branch_length == n_passing_muts, \
+            f"branch_length ({full_branch_length}) != n_passing_muts ({n_passing_muts})"
 
-        return n_passing_filters, counts_df, pcps, filter_stats
+        return n_passing_filters, partition_dfs, pcps, filter_stats
 
     def count_mutations_on_tree(self, max_mutations=4):
         """
         Count the number of mutations along the tree. Return the number of nodes passing
-        the filter, a dataframe of per site nucleotide mutations, a dataframe of
-        parent child pairs, and aggregate filter statistics.
+        the filter, a dict mapping partition name ('full' always present, plus 'split_a'
+        and 'split_b' when partitioning is active) to its aggregated counts DataFrame,
+        a dataframe of parent child pairs (full tree only), and aggregate filter
+        statistics.
 
         Parameters:
             max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
-        # Initialize variables
-        all_counts_df = pd.DataFrame()
+        # Initialize per-partition accumulators
+        partition_names = ("full",) + self.partition_names
+        partition_aggs = {name: pd.DataFrame() for name in partition_names}
         n_passing_filters = 0
         all_pcps = []
         t0 = -time()
@@ -307,13 +339,22 @@ class CountsHelper:
             'filtered_by_duplicates': 0
         }
 
+        groupby_cols = [
+            'site', 'nt_mut', 'wt_nt', 'mut_nt',
+            'gene', 'codon_position', 'codon_site',
+            'wt_codon', 'mut_codon', 'wt_aa', 'mut_aa',
+            'aa_mut', 'parent_motif'
+        ]
+        if self.node_host is not None:
+            groupby_cols = groupby_cols + ['host']
+
         # Iterate over all internal nodes. For each, record counts along branches to children,
         # only considering branches that pass filters. Also record each PCP passing filters.
         for i, node in enumerate(self.int_nodes, 1):
 
             if i % 1000 == 0:
                 print(f"processing internal node {i}; {t0+time():0.1f} seconds")
-            n_passing_filters_i, counts_df, pcps, filter_stats = self.count_mutations_from_parent(node, max_mutations)
+            n_passing_filters_i, partition_dfs, pcps, filter_stats = self.count_mutations_from_parent(node, max_mutations)
             n_passing_filters += n_passing_filters_i
 
             # Accumulate filter statistics
@@ -321,40 +362,36 @@ class CountsHelper:
                 aggregate_stats[key] += filter_stats[key]
 
             # Skip the internal node if no branches to its children passed the filters
-            # (or, when host_groups is set, if the parent's host was filtered out)
-            if counts_df.empty or counts_df['branch_length'].sum() == 0:
+            # (or, when host_groups is set, if the parent's host was filtered out).
+            # The full counts dataframe is the source of truth here; the splits are
+            # complementary halves of the same set of passing branches.
+            full_df = partition_dfs["full"]
+            if full_df.empty or full_df['branch_length'].sum() == 0:
                 continue
 
-            # Add PCPs to the big list for the whole tree
+            # Add PCPs (full tree only) to the big list for the whole tree
             all_pcps.append(pcps)
 
-            # Add counts and branch lengths to the big dataframe for the whole tree
-            if all_counts_df.empty:
-                all_counts_df = counts_df
-            else:
-                if n_passing_filters == 0:
+            # Add counts and branch lengths to the per-partition aggregators
+            for name, df in partition_dfs.items():
+                if df.empty:
                     continue
-                cols = [
-                    'site', 'nt_mut', 'wt_nt', 'mut_nt',
-                    'gene', 'codon_position', 'codon_site',
-                    'wt_codon', 'mut_codon', 'wt_aa', 'mut_aa',
-                    'aa_mut', 'parent_motif'
-                ]
-                if self.node_host is not None:
-                    cols.append('host')
-                all_counts_df = (
-                    pd.concat([all_counts_df, counts_df])
-                    .groupby(cols, as_index=False)
-                    .agg({
-                        'actual_count' : 'sum',
-                        'branch_length' : 'sum',
-                        'syn_branch_length' : 'sum'
-                    })
-                )
+                if partition_aggs[name].empty:
+                    partition_aggs[name] = df
+                else:
+                    partition_aggs[name] = (
+                        pd.concat([partition_aggs[name], df])
+                        .groupby(groupby_cols, as_index=False)
+                        .agg({
+                            'actual_count' : 'sum',
+                            'branch_length' : 'sum',
+                            'syn_branch_length' : 'sum'
+                        })
+                    )
 
-        # Add metadata to the counts dataframe
+        # Add metadata to each partition's counts dataframe
         def get_mut_class(wt_aa_list, mut_aa_list):
-            
+
             # Split the amino acid lists and determine mutation class
             wt_aa_list = wt_aa_list.split(';')
             mut_aa_list = mut_aa_list.split(';')
@@ -366,7 +403,7 @@ class CountsHelper:
                     mut_class_list.append('nonsense')
                 else:
                     mut_class_list.append('nonsynonymous')
-            
+
             # Determine the overall mutation class
             if 'nonsense' in mut_class_list:
                 return 'nonsense'
@@ -375,15 +412,19 @@ class CountsHelper:
             else:
                 return 'synonymous'
 
-        all_counts_df['mut_class'] = all_counts_df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
-        all_counts_df['mut_type']  = all_counts_df['wt_nt'] + all_counts_df['mut_nt']
+        for name, df in partition_aggs.items():
+            if df.empty:
+                continue
+            df['mut_class'] = df.apply(lambda row: get_mut_class(row['wt_aa'], row['mut_aa']), axis=1)
+            df['mut_type']  = df['wt_nt'] + df['mut_nt']
+            partition_aggs[name] = df
 
-        # Aggregate the counts and branch lengths across all nodes
+        # Build the full-tree PCP DataFrame (splits do not write PCPs)
         all_pcps_df = self.pcp_list_to_df(all_pcps)
         if self.node_host is not None:
             all_pcps_df['host'] = all_pcps_df['parent_name'].map(self.node_host)
 
-        return n_passing_filters, all_counts_df, all_pcps_df, aggregate_stats
+        return n_passing_filters, partition_aggs, all_pcps_df, aggregate_stats
 
     def pcp_list_to_df(self, pcps):
         """
@@ -405,6 +446,8 @@ class CountsHelper:
         self,
         all_counts_path,
         all_pcps_path,
+        a_counts_path=None,
+        b_counts_path=None,
         max_mutations=4,
     ):
         """
@@ -413,14 +456,29 @@ class CountsHelper:
         Parameters:
             all_counts_path (str): Output path for mutation counts CSV.
             all_pcps_path (str): Output path for parent-child pairs CSV (optional).
+            a_counts_path (str or None): Output path for split-a mutation counts CSV.
+                Must be supplied iff partitioning was enabled in __init__.
+            b_counts_path (str or None): Output path for split-b mutation counts CSV.
+                Must be supplied iff partitioning was enabled in __init__.
             max_mutations (int): Maximum number of mutations allowed (default: 4).
         """
+
+        partition_active = self.partition_rng is not None
+        split_paths_supplied = (a_counts_path is not None) or (b_counts_path is not None)
+        if partition_active and (a_counts_path is None or b_counts_path is None):
+            raise ValueError(
+                "partition_seed is set but a_counts_path / b_counts_path were not both supplied."
+            )
+        if split_paths_supplied and not partition_active:
+            raise ValueError(
+                "Split-a/split-b output paths were supplied but partition_seed is not set."
+            )
 
         print(f"Number of nodes in tree: {self.n_nodes}")
         print(f"Number of internal nodes in tree: {self.n_int_nodes}")
 
         print(f"Counting mutations on tree...")
-        n_passing_filters, all_counts_df, all_pcps_df, filter_stats = self.count_mutations_on_tree(max_mutations)
+        n_passing_filters, partition_aggs, all_pcps_df, filter_stats = self.count_mutations_on_tree(max_mutations)
         print(f"Number of nodes passing filter: {n_passing_filters}")
 
         # Print detailed filtering statistics
@@ -465,9 +523,12 @@ class CountsHelper:
 
         print("=" * 60 + "\n")
 
-        all_counts_df.to_csv(all_counts_path, index=False)
+        partition_aggs["full"].to_csv(all_counts_path, index=False)
         if all_pcps_path is not None:
             all_pcps_df.to_csv(all_pcps_path, index=False)
+        if partition_active:
+            partition_aggs["split_a"].to_csv(a_counts_path, index=False)
+            partition_aggs["split_b"].to_csv(b_counts_path, index=False)
 
         return None
 
@@ -482,6 +543,9 @@ def main():
     parser.add_argument('--all_pcps_path', required=False, default=None, help='Output path for parent-child pairs CSV (optional)')
     parser.add_argument('--host_tsv', required=False, default=None, help='Optional TSV mapping node IDs to host_group; enables host-stratified counts')
     parser.add_argument('--host_groups', required=False, nargs='+', default=None, help='Optional set of host labels to keep; only branches whose parent has one of these hosts are recorded')
+    parser.add_argument('--partition_seed', required=False, type=int, default=None, help='Optional integer seed enabling a random split-half partition; passing branches are routed to split_a/split_b by a coin flip')
+    parser.add_argument('--all_counts_path_split_a', required=False, default=None, help='Output path for split-a mutation counts CSV (requires --partition_seed)')
+    parser.add_argument('--all_counts_path_split_b', required=False, default=None, help='Output path for split-b mutation counts CSV (requires --partition_seed)')
 
     # Parse arguments
     args = parser.parse_args()
@@ -494,12 +558,15 @@ def main():
         args.gtf_path,
         host_tsv_path=args.host_tsv,
         host_groups=args.host_groups,
+        partition_seed=args.partition_seed,
     )
-    
+
     # Compute counts and write them to files
     counts_helper.make_and_write_all_counts(
         args.all_counts_path,
-        args.all_pcps_path
+        args.all_pcps_path,
+        a_counts_path=args.all_counts_path_split_a,
+        b_counts_path=args.all_counts_path_split_b,
     )
 
 if __name__ == "__main__":
