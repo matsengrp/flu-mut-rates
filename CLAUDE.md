@@ -91,12 +91,10 @@ results/
 │   │   ├── asia/
 │   │   │   ├── mutation_counts.csv
 │   │   │   └── parent_child_pairs.csv
-│   │   ├── early/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
-│   │   └── late/
-│   │       ├── mutation_counts.csv
-│   │       └── parent_child_pairs.csv
+│   │   ├── split_a/
+│   │   │   └── mutation_counts.csv
+│   │   └── split_b/
+│   │       └── mutation_counts.csv
 │   └── {H3,H5,H7,H9}/
 ├── NA/
 │   ├── N1/
@@ -133,9 +131,10 @@ results/
    - Input data directory (`../flu-usher/results`)
    - HA subtypes: H1, H3, H5, H7, H9
    - NA subtypes: N1, N2, N6, N8, N9
-   - Host groups: human, avian
+   - Host groups: human, avian, swine
    - Geographic groups: north_america, europe, asia
-   - Temporal groups: early, late
+   - Split-half groups: split_a, split_b (random branch partition for robustness)
+   - Split-half seed: integer seed for the partition (reproducible)
    - All genome segments to analyze (PB2, PB1, PA, HA, NP, NA, MP, NS)
 
 3. **scripts/**: Python scripts for analysis:
@@ -149,25 +148,23 @@ results/
 4. **notebooks/**: Jupyter notebooks executed as part of pipeline:
    - `compute_rates.ipynb`: Calculates mutation rates from count data (global + host trees)
    - `analyze_genome_wide_rates.ipynb`: Visualizes and analyzes genome-wide rates
-   - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, temporal)
+   - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, split-half)
    - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
    - `analyze_subset_fitness_effects.ipynb`: Scatter plots comparing fitness effects between subsets
-   - `check_subset_pcp_overlap.ipynb`: Checks PCP overlap between subsets within each grouping dimension
    - `compose_figures.ipynb`: Assembles multi-panel manuscript figures from individual PNGs (run manually, not wired into the Snakefile pipeline)
 
 ### Pipeline Workflow
 
 1. **Create Coding Sites** → Maps nucleotide positions to codon positions using GFF annotations
-2. **Count Mutations** → Traverses phylogenetic trees (global, host-specific, geographic, and temporal) to count and classify mutations
+2. **Count Mutations** → Traverses phylogenetic trees (global, host-specific, and geographic) to count and classify mutations. The global-tree pass also emits `split_a/mutation_counts.csv` and `split_b/mutation_counts.csv` — random complementary halves of the passing branches (seeded), used as a robustness control for fitness-effect comparisons
 3. **Align Proteins** → Cross-subtype protein alignments (HA and NA only)
 4. **Compute Mutation Rates** → Aggregates counts and calculates genome-wide, segment-wide, motif-level, and site-specific rates
 5. **Analyze Genome-Wide Rates** → Executes analysis notebook to visualize rates and compare across hosts/viruses
 6. **Fit Neutral Models** → Fits log-linear models (base, local context, full) to predict synonymous mutation rates
 7. **Augment Expected Rates** → Creates complete expected rates table with all 12 mutation types (adds CG/GC using motif-specific rates where available, segment-wide rates as fallback)
-8. **Compute Subset Rates** → Aggregates mutation counts from subset trees (host, geographic, temporal) with a `subset` column
+8. **Compute Subset Rates** → Aggregates mutation counts from subset trees (host, geographic, split-half) with `subset` and `subset_type` columns
 9. **Compute Subset Fitness Effects** → Uses global neutral model expected rates to compute AA-level fitness effects per subset
-10. **Analyze Subset Fitness Effects** → Scatter plots comparing fitness effects between pairs of subsets
-11. **Check Subset PCP Overlap** → Verifies that parent-child pairs have minimal overlap between host and temporal subsets (geographic subsets may overlap)
+10. **Analyze Subset Fitness Effects** → Scatter plots comparing fitness effects between pairs of subsets. The split_a-vs-split_b pair is a noise-floor reference: it bounds the agreement we could expect from any half-data comparison, making cross-host / cross-region differences interpretable as biological signal above this floor
 
 ### Input Requirements
 
@@ -175,7 +172,6 @@ From flu-usher pipeline:
 - `final_tree.pb.gz`: Global phylogenetic tree (all hosts) in protobuf format
 - `host_specific_trees/{host}_tree.pb.gz`: Host-specific phylogenetic trees (human, avian)
 - `geographic_trees/{geo}_tree.pb.gz`: Geographic phylogenetic trees (north_america, europe, asia)
-- `temporal_trees/{temporal}_tree.pb.gz`: Temporal phylogenetic trees (early, late)
 - `curated_root.fasta`: Reference sequence
 - `curated_reference.gff`: Gene annotations
 - `curated_reference.gtf`: Gene transfer format annotations
@@ -186,7 +182,7 @@ From flu-usher pipeline:
 - HA and NA segments are analyzed by specific subtype
 - Protein alignment is only performed for HA and NA segments
 - The pipeline uses compressed tree files (.pb.gz) from UShER
-- Both global (all hosts) and subset-specific trees (host, geographic, temporal) are analyzed
+- Both global (all hosts) and subset-specific trees (host, geographic) are analyzed; the global-tree pass also produces a random split-half pair (`split_a` / `split_b`) used as a noise-floor reference for fitness-effect comparisons
 - Notebooks are executed automatically via `jupyter nbconvert --execute --inplace`
 - All logs are saved in the `logs/` directory
 - The pipeline can process multiple segments/subtypes in parallel

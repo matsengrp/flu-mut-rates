@@ -2,7 +2,7 @@
 
 ## Overview
 
-This pipeline calculates synonymous and non-synonymous mutation rates across influenza virus sequences by analyzing phylogenetic trees and sequence data. It processes multiple influenza subtypes (e.g., H1, H3, N1, N2), genome segments (e.g., HA, NA, PB2), and tree subsets (host groups, geographic regions, temporal periods) as specified in the configuration.
+This pipeline calculates synonymous and non-synonymous mutation rates across influenza virus sequences by analyzing phylogenetic trees and sequence data. It processes multiple influenza subtypes (e.g., H1, H3, N1, N2), genome segments (e.g., HA, NA, PB2), and tree subsets (host groups, geographic regions) as specified in the configuration.
 
 ## Setup
 
@@ -34,10 +34,9 @@ flu-mut-rates/
 │   ├── process_dms_data_teo_nep.ipynb         # Process Teo et al. NEP DMS data
 │   ├── analyze_fitness_effects.ipynb          # Compare fitness effects to DMS data
 │   ├── summarize_filter_logs.ipynb            # Summarize mutation filter statistics
-│   ├── compute_subset_rates.ipynb             # Compute rates for subset trees (host, geographic, temporal)
+│   ├── compute_subset_rates.ipynb             # Compute rates for subset trees (host, geographic, split-half)
 │   ├── compute_subset_fitness_effects.ipynb   # Compute AA fitness effects per subset
 │   ├── analyze_subset_fitness_effects.ipynb   # Compare fitness effects between subsets
-│   ├── check_subset_pcp_overlap.ipynb         # Check PCP overlap between subsets
 │   └── compose_figures.ipynb                  # Assemble multi-panel figures from individual PNGs
 ├── logs/                 # Log files for pipeline runs
 ├── data/                 # Input data (organized by segment, subtype, and host)
@@ -53,13 +52,10 @@ flu-mut-rates/
 │   │   │   ├── host_specific_trees/
 │   │   │   │   ├── human_tree.pb.gz
 │   │   │   │   └── avian_tree.pb.gz
-│   │   │   ├── geographic_trees/
-│   │   │   │   ├── north_america_tree.pb.gz
-│   │   │   │   ├── europe_tree.pb.gz
-│   │   │   │   └── asia_tree.pb.gz
-│   │   │   └── temporal_trees/
-│   │   │       ├── early_tree.pb.gz
-│   │   │       └── late_tree.pb.gz
+│   │   │   └── geographic_trees/
+│   │   │       ├── north_america_tree.pb.gz
+│   │   │       ├── europe_tree.pb.gz
+│   │   │       └── asia_tree.pb.gz
 │   │   └── H3/
 │   │       └── ...
 │   └── NA/
@@ -74,7 +70,6 @@ Edit `config.yaml` to specify:
 - Genome segments to analyze
 - Host groups to analyze
 - Geographic groups to analyze
-- Temporal groups to analyze
 - Data directory locations
 
 Example configuration:
@@ -104,9 +99,11 @@ geographic_groups:
   - "europe"
   - "asia"
 
-temporal_groups:
-  - "early"
-  - "late"
+# Random branch-partition robustness check
+split_half_groups:
+  - "split_a"
+  - "split_b"
+split_half_seed: 42
 
 data_dir: "../flu-usher/results"
 output_dir: "results"
@@ -150,9 +147,12 @@ For each segment and subtype combination:
 2. Reads the global phylogenetic tree (`final_tree.pb.gz`), reference sequence, and GTF annotation
 3. Traverses the tree to count mutations at each branch across all hosts
 4. Classifies mutations as synonymous or non-synonymous
-5. Outputs two files at the segment/subtype level:
+5. **In the same traversal**, randomly partitions every passing branch into `split_a` or `split_b` by a coin flip seeded with `config["split_half_seed"]` (a robustness control: see Step 16)
+6. Outputs four files at the segment/subtype level:
    - `mutation_counts.csv` - Summary of mutations by site and type
    - `parent_child_pairs.csv` - Detailed mutation records for each branch
+   - `split_a/mutation_counts.csv` - Mutation counts restricted to a random half of branches
+   - `split_b/mutation_counts.csv` - Mutation counts on the complementary half
 
 #### Host-Specific Tree Analysis
 For each segment, subtype, and host combination:
@@ -171,16 +171,6 @@ For each segment, subtype, and geographic group combination:
 3. Traverses the tree to count mutations at each branch for that geographic region
 4. Classifies mutations as synonymous or non-synonymous
 5. Outputs two files per geographic group:
-   - `mutation_counts.csv` - Summary of mutations by site and type
-   - `parent_child_pairs.csv` - Detailed mutation records for each branch
-
-#### Temporal Tree Analysis
-For each segment, subtype, and temporal group combination:
-1. Takes the coding sites file from Step 1
-2. Reads the temporal phylogenetic tree (`temporal_trees/{temporal}_tree.pb.gz`), reference sequence, and GTF annotation
-3. Traverses the tree to count mutations at each branch for that time period
-4. Classifies mutations as synonymous or non-synonymous
-5. Outputs two files per temporal group:
    - `mutation_counts.csv` - Summary of mutations by site and type
    - `parent_child_pairs.csv` - Detailed mutation records for each branch
 
@@ -335,9 +325,9 @@ The notebook produces three figures:
 
 ### Step 14: Compute Subset Rates
 
-Aggregates mutation counts from all subset trees (host-specific, geographic, temporal):
+Aggregates mutation counts from all subset trees (host-specific, geographic, split-half):
 1. Reads mutation counts from each subset directory
-2. Labels each row with `subset` (group name) and `subset_type` (host/geographic/temporal)
+2. Labels each row with `subset` (group name) and `subset_type` (`host` / `geographic` / `split_half`)
 3. Computes evolutionary opportunity and mutation rates
 4. Outputs `results/subset_counts.csv`
 
@@ -353,19 +343,12 @@ Computes amino-acid-level fitness effects for each subset:
 ### Step 16: Analyze Subset Fitness Effects
 
 Compares fitness effects between subsets:
-1. For each pair of subsets within the same type (e.g., human vs avian, early vs late, north_america vs europe):
+1. For each pair of subsets within the same type (e.g., human vs avian, north_america vs europe, split_a vs split_b):
    - Matches nonsynonymous amino acid mutations present in both subsets
    - Creates scatter plots of fitness effects with Pearson correlation
 2. Filters to mutations meeting the count threshold in both subsets
 
-### Step 17: Check Subset PCP Overlap
-
-Checks whether parent-child pairs (PCPs) overlap between subsets within each grouping dimension:
-1. Loads PCP files for each subset (host, geographic, temporal)
-2. For each pair of subsets within a dimension, computes:
-   - Parent-only overlap: fraction of parent sequences shared between subsets
-   - Parent+child overlap: fraction of (parent, child) pairs shared between subsets
-3. Reports counts and fractions, with the expectation that host and temporal subsets have small overlap, while geographic subsets may have substantial overlap
+The `split_a` vs `split_b` comparison is a noise-floor control: both halves are random samples from the same global tree, so their Pearson R per protein represents the maximum agreement we could expect from any half-data comparison. Lower agreement between, say, `human` vs `avian` is then interpretable as biological signal above this floor rather than data-amount noise.
 
 ## Running the Pipeline
 
@@ -387,8 +370,8 @@ snakemake --cores 8 results/HA/H1/human/mutation_counts.csv
 # Process both global and host-specific for a segment/subtype
 snakemake --cores 8 results/HA/H1/mutation_counts.csv results/HA/H1/human/mutation_counts.csv results/HA/H1/avian/mutation_counts.csv
 
-# Process geographic/temporal subset trees
-snakemake --cores 8 results/HA/H3/north_america/mutation_counts.csv results/HA/H3/early/mutation_counts.csv
+# Process a geographic subset tree
+snakemake --cores 8 results/HA/H3/north_america/mutation_counts.csv
 
 # Run subset fitness effect analysis
 snakemake --cores 8 results/subset_aa_fitness_effects.csv
@@ -443,10 +426,6 @@ The pipeline generates the following output files:
 
 3b. **Geographic Tree Outputs**: `results/{segment}/{subtype}/{geo}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific geographic region (same columns as global `mutation_counts.csv`)
-   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
-
-3c. **Temporal Tree Outputs**: `results/{segment}/{subtype}/{temporal}/`
-   - `mutation_counts.csv` - Aggregated mutation counts for the specific temporal group (same columns as global `mutation_counts.csv`)
    - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
 
 4. **Aligned Proteins** (HA and NA only): `results/aligned_proteins/{segment}/`
@@ -571,10 +550,10 @@ Located in the `results/` root directory:
    - `all_data.csv` - SHAPE-MaP RNA structure reactivities (Dadonaite et al. 2019) mapped to reference site coordinates for internal segments
 
 10. **Subset Analysis Outputs**:
-   - `subset_counts.csv` - Aggregated mutation counts from all subset trees (host, geographic, temporal)
+   - `subset_counts.csv` - Aggregated mutation counts from all subset trees (host, geographic, split-half)
      - Same columns as `counts.csv`, except `host` is replaced by:
-       - `subset` — subset name (e.g. `"human"`, `"north_america"`, `"early"`)
-       - `subset_type` — subset category (`"host"`, `"geographic"`, `"temporal"`)
+       - `subset` — subset name (e.g. `"human"`, `"north_america"`, `"split_a"`)
+       - `subset_type` — subset category (`"host"`, `"geographic"`, `"split_half"`)
    - `subset_aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects for each subset
      - Columns:
        - `subset` — subset name
@@ -625,12 +604,10 @@ results/
 │   │   ├── asia/
 │   │   │   ├── mutation_counts.csv
 │   │   │   └── parent_child_pairs.csv
-│   │   ├── early/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
-│   │   └── late/
-│   │       ├── mutation_counts.csv
-│   │       └── parent_child_pairs.csv
+│   │   ├── split_a/
+│   │   │   └── mutation_counts.csv
+│   │   └── split_b/
+│   │       └── mutation_counts.csv
 │   └── H3/
 │       └── ...
 ├── aligned_proteins/
@@ -669,7 +646,6 @@ results/
 ├── subset_counts.csv
 ├── subset_aa_fitness_effects.csv
 ├── .analyze_subset_fitness_effects.done
-├── .check_subset_pcp_overlap.done
 └── neutral_model/
     ├── base/
     │   ├── expected_rates_by_predictor.csv
