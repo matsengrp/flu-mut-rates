@@ -238,8 +238,7 @@ Computes fitness effects of nucleotide and amino acid mutations by comparing obs
 3. Computes per-site synonymous fitness effects as the mean of per-nucleotide-mutation `delta_fitness` values across synonymous mutations at each site
 4. Aggregates all nucleotide mutations by resulting amino acid change to compute per-amino-acid-mutation fitness effects as log((actual_count + 0.5) / (expected_count + 0.5))
 
-Outputs four CSV files at the results root:
-- `actual_expected.csv` - Per-mutation counts joined with neutral model expected counts
+Outputs three CSV files at the results root:
 - `nt_fitness_effects.csv` - Per-nucleotide-mutation fitness effects
 - `sitewise_synonymous_fitness_effects.csv` - Per-site synonymous fitness effects (mean of per-nucleotide-mutation effects)
 - `aa_fitness_effects.csv` - Per-amino-acid-mutation fitness effects
@@ -505,10 +504,6 @@ Located in the `results/` root directory:
    - Columns: same as `local_context+global_context/expected_rates_by_predictor.csv` (`mut_type`, `segment`, `motif`, `predicted_rate`), but with complete coverage of all 12 mutation types; CG and GC rates are filled in from the augmentation step (Step 7) rather than model predictions
 
 8. **Fitness Effect Files**:
-   - `actual_expected.csv` - Per-mutation counts joined with neutral model expected counts
-     - Columns: same as `counts.csv`, plus:
-       - `predicted_rate` — neutral model predicted rate for this mutation type/motif/segment (from `expected_rates.csv`)
-       - `expected_count` — expected number of observations under the neutral model (`predicted_rate × evo_opp`)
    - `nt_fitness_effects.csv` - Per-nucleotide-mutation fitness effects
      - Columns:
        - `host` — host group (`"human"`, `"avian"`, or `"all"`)
@@ -620,7 +615,6 @@ results/
 ├── evo_opp_thresholds.csv
 ├── site_specific_mutation_rates.csv
 ├── expected_rates.csv
-├── actual_expected.csv
 ├── nt_fitness_effects.csv
 ├── sitewise_synonymous_fitness_effects.csv
 ├── aa_fitness_effects.csv
