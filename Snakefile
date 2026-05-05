@@ -134,7 +134,6 @@ final_outputs.extend([
 
 # Add compute_fitness_effects outputs to final targets
 final_outputs.extend([
-    f"{config['output_dir']}/actual_expected.csv",
     f"{config['output_dir']}/sitewise_synonymous_fitness_effects.csv",
     f"{config['output_dir']}/aa_fitness_effects.csv"
 ])
@@ -406,7 +405,6 @@ rule compute_fitness_effects:
         counts="{output_dir}/counts.csv",
         expected_rates="{output_dir}/expected_rates.csv"
     output:
-        actual_expected="{output_dir}/actual_expected.csv",
         syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
         aa_fitness="{output_dir}/aa_fitness_effects.csv",
         nt_fitness="{output_dir}/nt_fitness_effects.csv"
