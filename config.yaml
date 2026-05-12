@@ -43,7 +43,7 @@ split_half_groups:
 split_half_seed: 42
 
 # Data directory paths
-data_dir: "../flu-usher/results"
+data_dir: "/fh/fast/matsen_e/hhaddox/2025/flu-usher/results"
 output_dir: "results"
 
 # Optional: genes to ignore in specific segments during coding site creation
