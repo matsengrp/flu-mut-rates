@@ -50,3 +50,14 @@ output_dir: "results"
 ignore_genes:
   PB1:
     - "PB1-F2"
+
+# Optional: ORFs not present in the GFF that should be included as additional
+# (overlapping) coding regions in coding_sites.csv. Modelled as separate "genes"
+# with one CDS each; treated identically to GFF-defined overlapping ORFs
+# (e.g. M1/M2, NS1/NEP) downstream.
+additional_orfs:
+  PA:
+    - name: "X-ORF"
+      start: 572
+      end: 760
+      reference: "Jagger et al. 2012 (Science)"

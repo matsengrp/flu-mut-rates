@@ -1,3 +1,5 @@
+import json
+
 # Load configuration
 configfile: "config.yaml"
 
@@ -185,6 +187,9 @@ rule make_coding_sites:
     params:
         ignore_genes=lambda wildcards: " ".join(
             config.get("ignore_genes", {}).get(wildcards.segment, [])
+        ),
+        additional_orfs=lambda wildcards: json.dumps(
+            config.get("additional_orfs", {}).get(wildcards.segment, [])
         )
     shell:
         """
@@ -194,7 +199,8 @@ rule make_coding_sites:
             --subtype {wildcards.subtype} \
             --segment {wildcards.segment} \
             --output_directory {wildcards.output_dir}/{wildcards.segment}/{wildcards.subtype} \
-            --ignore_genes {params.ignore_genes} &> {log}
+            --ignore_genes {params.ignore_genes} \
+            --additional_orfs '{params.additional_orfs}' &> {log}
         """
 
 # Count mutations along geographic trees
