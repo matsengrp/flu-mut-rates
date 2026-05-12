@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import pandas as pd
 from Bio import SeqIO
@@ -18,7 +19,12 @@ def main():
     parser.add_argument('--segment', required=True, help='Gene segment (e.g., HA, NA)')
     parser.add_argument('--ignore_genes', nargs='*', default=[],
                         help='Gene names to exclude from coding site mapping (e.g. PB1-F2)')
+    parser.add_argument('--additional_orfs', default='[]',
+                        help='JSON-encoded list of {name, start, end} dicts for ORFs '
+                             'not present in the GFF (e.g. PA X-ORF). Treated as '
+                             'single-CDS overlapping genes.')
     args = parser.parse_args()
+    additional_orfs = json.loads(args.additional_orfs)
 
     # Read in the reference sequence from the FASTA file, assuming it is the first sequence
     with open(args.ref_fasta, 'r') as fasta_file:
@@ -65,6 +71,15 @@ def main():
     if args.ignore_genes:
         genes_info = {name: data for name, data in genes_info.items() if name not in args.ignore_genes}
         print(f"Ignoring genes: {args.ignore_genes}")
+
+    for orf in additional_orfs:
+        genes_info[orf['name']] = {
+            'cdss': [(int(orf['start']), int(orf['end']), '+')],
+            'strand': '+',
+        }
+    if additional_orfs:
+        print(f"Adding {len(additional_orfs)} non-GFF ORFs: "
+              f"{[orf['name'] for orf in additional_orfs]}")
 
     print(f"Found {len(genes_info)} genes: {list(genes_info.keys())}")
     
