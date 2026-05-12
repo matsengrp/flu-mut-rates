@@ -181,7 +181,8 @@ rule make_coding_sites:
         ref_fasta=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
         gff_file=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gff"
     output:
-        coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv"
+        coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv",
+        protein_sequences=directory("{output_dir}/{segment}/{subtype}/protein_sequences")
     log:
         "{output_dir}/logs/{segment}/{subtype}/coding_sites.log"
     params:
@@ -648,6 +649,10 @@ rule align_proteins:
     input:
         # Ensure all coding sites files are created first for this segment
         coding_sites=lambda wildcards: expand("{output_dir}/{segment}/{subtype}/coding_sites.csv",
+                          output_dir=config["output_dir"],
+                          segment=wildcards.segment,
+                          subtype=get_subtypes_for_segment(wildcards.segment)),
+        protein_sequences=lambda wildcards: expand("{output_dir}/{segment}/{subtype}/protein_sequences",
                           output_dir=config["output_dir"],
                           segment=wildcards.segment,
                           subtype=get_subtypes_for_segment(wildcards.segment))
