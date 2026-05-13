@@ -165,6 +165,9 @@ final_outputs.extend([
     f"{config['output_dir']}/.analyze_subset_fitness_effects.done",
 ])
 
+# Add compose_figures notebook to final targets
+final_outputs.append(f"{config['output_dir']}/.compose_figures.done")
+
 # Add dashboard exports to final targets
 final_outputs.append("docs/index.html")
 final_outputs.append("docs/aa/index.html")
@@ -836,6 +839,46 @@ rule analyze_subset_fitness_effects:
             --inplace \
             --ExecutePreprocessor.timeout=600 \
             analyze_subset_fitness_effects.ipynb &> ../{log}
+        """
+
+# Compose multi-panel manuscript figures from individual panel PNGs.
+# Reads panels produced by the upstream analyze_* notebooks, plus eight manually
+# staged PNGs in data/pngs/ (concept map, tree summary, nt/aa heatmaps, and four
+# splice-site heatmaps) and the flu-usher leaves_per_tree.png.
+rule compose_figures:
+    input:
+        notebook="notebooks/compose_figures.ipynb",
+        genome_wide_done="{output_dir}/.analyze_genome_wide_rates.done",
+        site_specific_done="{output_dir}/.analyze_site_specific_rates.done",
+        fitness_effects_done="{output_dir}/.analyze_fitness_effects.done",
+        leaves_per_tree=f"{config['data_dir']}/figures/leaves_per_tree.png",
+        manual_pngs=expand(
+            "data/pngs/{name}.png",
+            name=[
+                "summary_concept_map",
+                "tree_summary",
+                "nt_heatmap",
+                "aa_heatmap",
+                "MP_5SS",
+                "MP_3SS",
+                "NS_5SS",
+                "NS_3SS",
+            ],
+        )
+    output:
+        touch("{output_dir}/.compose_figures.done")
+    log:
+        "{output_dir}/logs/compose_figures.log"
+    shell:
+        """
+        mkdir -p {wildcards.output_dir}/figures/ms_figures && \
+        cd notebooks && \
+        jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --inplace \
+            --ExecutePreprocessor.timeout=600 \
+            compose_figures.ipynb &> ../{log}
         """
 
 # Summarize mutation filter statistics across all trees from log files

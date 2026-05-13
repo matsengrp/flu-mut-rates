@@ -151,7 +151,7 @@ results/
    - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, split-half)
    - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
    - `analyze_subset_fitness_effects.ipynb`: Scatter plots comparing fitness effects between subsets
-   - `compose_figures.ipynb`: Assembles multi-panel manuscript figures from individual PNGs (run manually, not wired into the Snakefile pipeline)
+   - `compose_figures.ipynb`: Assembles multi-panel manuscript figures from individual PNGs produced by the analyze notebooks plus eight manually staged PNGs in `data/pngs/` (concept map, tree summary, nt/aa heatmaps, and four splice-site heatmaps)
 
 ### Pipeline Workflow
 
