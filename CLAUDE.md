@@ -110,7 +110,7 @@ results/
 ├── segment_wide_rates.csv              # Segment-specific rates
 ├── motif_level_genome_wide_rates.csv   # Context-dependent rates
 ├── evo_opp_thresholds.csv              # Evolutionary opportunity filters
-├── site_specific_mutation_rates.csv    # Per-site rates
+├── site_specific_substitution_rates.csv    # Per-site rates
 ├── expected_rates.csv                  # Complete rates table (all 12 mutation types)
 ├── subset_counts.csv                   # Aggregated mutation counts for subset trees
 ├── subset_aa_fitness_effects.csv       # AA-level fitness effects per subset

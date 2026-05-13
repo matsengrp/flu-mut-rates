@@ -110,7 +110,7 @@ final_outputs.extend([
     f"{config['output_dir']}/genome_wide_rates.csv",
     f"{config['output_dir']}/motif_level_genome_wide_rates.csv",
     f"{config['output_dir']}/evo_opp_thresholds.csv",
-    f"{config['output_dir']}/site_specific_mutation_rates.csv"
+    f"{config['output_dir']}/site_specific_substitution_rates.csv"
 ])
 
 # Add genome-wide rates analysis notebook to final targets
@@ -305,7 +305,7 @@ rule compute_rates:
         genome_wide_rates="{output_dir}/genome_wide_rates.csv",
         motif_rates="{output_dir}/motif_level_genome_wide_rates.csv",
         evo_opp_thresholds="{output_dir}/evo_opp_thresholds.csv",
-        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv",
+        site_specific_rates="{output_dir}/site_specific_substitution_rates.csv",
         segment_wide_rates="{output_dir}/segment_wide_rates.csv"
     log:
         "{output_dir}/logs/compute_rates.log"
@@ -344,7 +344,7 @@ rule analyze_genome_wide_rates:
 rule analyze_site_specific_rates:
     input:
         notebook="notebooks/analyze_site_specific_rates.ipynb",
-        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv",
+        site_specific_rates="{output_dir}/site_specific_substitution_rates.csv",
         segment_wide_rates="{output_dir}/segment_wide_rates.csv",
         motif_rates="{output_dir}/motif_level_genome_wide_rates.csv",
         local_context_performance="{output_dir}/neutral_model/local_context/model_performance.csv",
@@ -370,7 +370,7 @@ rule analyze_site_specific_rates:
 rule fit_neutral_models:
     input:
         script="scripts/rates_model.py",
-        site_specific_rates="{output_dir}/site_specific_mutation_rates.csv"
+        site_specific_rates="{output_dir}/site_specific_substitution_rates.csv"
     output:
         # Base model outputs (no factors)
         base_expected="{output_dir}/neutral_model/base/expected_rates_by_predictor.csv",

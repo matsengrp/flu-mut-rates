@@ -197,7 +197,7 @@ Outputs six CSV files at the results root:
 - `segment_wide_rates.csv` - Segment-specific mutation rates
 - `motif_level_genome_wide_rates.csv` - Context-dependent rates
 - `evo_opp_thresholds.csv` - Evolutionary opportunity filters
-- `site_specific_mutation_rates.csv` - Per-site mutation rates
+- `site_specific_substitution_rates.csv` - Per-site mutation rates
 
 ### Step 5: Analyze Genome-Wide Rates
 
@@ -469,7 +469,7 @@ Located in the `results/` root directory:
    - `evo_opp_thresholds.csv` - Evolutionary opportunity thresholds for filtering
      - Columns: same as `genome_wide_rates.csv` minus `rel_rate`, plus:
        - `evo_opp_threshold` — minimum evolutionary opportunity a site must have to be included in rate calculations for this mutation type/class/host
-   - `site_specific_mutation_rates.csv` - Per-site mutation rates
+   - `site_specific_substitution_rates.csv` - Per-site mutation rates
      - Columns: same as `counts.csv`, plus:
        - `evo_opp_threshold` — minimum evolutionary opportunity threshold for this mutation type/class/host (from `evo_opp_thresholds.csv`)
        - `unclipped_rate` — raw per-site mutation rate before applying the floor
@@ -613,7 +613,7 @@ results/
 ├── segment_wide_rates.csv
 ├── motif_level_genome_wide_rates.csv
 ├── evo_opp_thresholds.csv
-├── site_specific_mutation_rates.csv
+├── site_specific_substitution_rates.csv
 ├── expected_rates.csv
 ├── nt_fitness_effects.csv
 ├── sitewise_synonymous_fitness_effects.csv
