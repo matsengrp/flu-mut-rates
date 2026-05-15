@@ -18,7 +18,8 @@ flu-mut-rates/
 │   ├── align_proteins.py           # Align proteins across subtypes
 │   ├── rates_model.py              # Fit neutral models to mutation rates
 │   ├── augment_expected_rates.py   # Add CG/GC to expected rates table
-│   └── ExpectedCalc.py             # Calculate expected mutation counts
+│   ├── ExpectedCalc.py             # Calculate expected mutation counts
+│   └── render_fitness_heatmaps.py  # Export single-panel heatmap PNGs for figures
 ├── notebooks/
 │   ├── compute_rates.ipynb                    # Calculate mutation rates
 │   ├── analyze_genome_wide_rates.ipynb        # Visualize and analyze rates
@@ -670,6 +671,17 @@ snakemake --cores 1 docs/aa/index.html --forcerun export_dashboard
 ```
 
 Each rule exports the notebook as a self-contained WASM app, patches the theme to dark, and copies the required result files into the `docs/{aa,nt}/results/` directory so they are accessible to the app at runtime.
+
+### Heatmap snapshots for the manuscript
+
+The same heatmap visuals shown in the dashboards are exported as static PNGs by `rule render_fitness_heatmaps`, which calls `scripts/render_fitness_heatmaps.py`. Each snapshot is a single-panel, dark-themed heatmap (no zoom bar, no line plot) for a fixed gene + site range; the per-PNG `SPECS` dict in the script controls which slices are rendered. Outputs land in `results/figures/` and are consumed by `notebooks/compose_figures.ipynb` to build the manuscript figure panels:
+
+- `aa_heatmap.png` — PA amino-acid fitness effects (sites 506–540)
+- `nt_heatmap.png` — MP synonymous nucleotide fitness effects
+- `MP_5SS.png` / `MP_3SS.png` — M2 5′/3′ splice-site windows
+- `NS_5SS.png` / `NS_3SS.png` — NEP 5′/3′ splice-site windows
+
+The chart-construction code is intentionally duplicated between the snapshot script and the marimo dashboards so the dashboards remain self-contained for WASM export. Visual specs (color scale, AA/NT row order) should be kept in sync between the two if changed.
 
 ## Requirements
 
