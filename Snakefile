@@ -841,10 +841,48 @@ rule analyze_subset_fitness_effects:
             analyze_subset_fitness_effects.ipynb &> ../{log}
         """
 
+# Render single-panel fitness-effect heatmap PNGs by re-using the same
+# Altair specs that drive the marimo dashboards (aa/nt_fitness_heatmap_dashboard.py).
+# Outputs go into results/figures/ alongside the other panel PNGs and feed
+# compose_figures.ipynb.
+HEATMAP_SNAPSHOT_NAMES = [
+    "aa_heatmap",
+    "nt_heatmap",
+    "MP_5SS",
+    "MP_3SS",
+    "NS_5SS",
+    "NS_3SS",
+]
+
+
+rule render_fitness_heatmaps:
+    input:
+        script="scripts/render_fitness_heatmaps.py",
+        aa_csv="{output_dir}/aa_fitness_effects.csv",
+        nt_csv="{output_dir}/nt_fitness_effects.csv",
+        aa_ref="{output_dir}/reference_aa.json",
+        nt_ref="{output_dir}/reference_nt.json",
+    output:
+        expand(
+            "{{output_dir}}/figures/{name}.png",
+            name=HEATMAP_SNAPSHOT_NAMES,
+        )
+    log:
+        "{output_dir}/logs/render_fitness_heatmaps.log"
+    shell:
+        """
+        python {input.script} \
+            --aa-csv {input.aa_csv} --nt-csv {input.nt_csv} \
+            --aa-ref {input.aa_ref} --nt-ref {input.nt_ref} \
+            --output-dir {wildcards.output_dir}/figures \
+            &> {log}
+        """
+
+
 # Compose multi-panel manuscript figures from individual panel PNGs.
-# Reads panels produced by the upstream analyze_* notebooks, plus eight manually
-# staged PNGs in data/pngs/ (concept map, tree summary, nt/aa heatmaps, and four
-# splice-site heatmaps) and the flu-usher leaves_per_tree.png.
+# Reads panels produced by the upstream analyze_* notebooks, two manually
+# staged PNGs in data/pngs/ (concept map, tree summary), the six fitness-effect
+# heatmaps rendered by render_fitness_heatmaps, and the flu-usher leaves_per_tree.png.
 rule compose_figures:
     input:
         notebook="notebooks/compose_figures.ipynb",
@@ -854,17 +892,12 @@ rule compose_figures:
         leaves_per_tree=f"{config['data_dir']}/figures/leaves_per_tree.png",
         manual_pngs=expand(
             "data/pngs/{name}.png",
-            name=[
-                "summary_concept_map",
-                "tree_summary",
-                "nt_heatmap",
-                "aa_heatmap",
-                "MP_5SS",
-                "MP_3SS",
-                "NS_5SS",
-                "NS_3SS",
-            ],
-        )
+            name=["summary_concept_map", "tree_summary"],
+        ),
+        heatmap_snapshots=expand(
+            "{{output_dir}}/figures/{name}.png",
+            name=HEATMAP_SNAPSHOT_NAMES,
+        ),
     output:
         touch("{output_dir}/.compose_figures.done")
     log:
