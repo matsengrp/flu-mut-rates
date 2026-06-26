@@ -50,9 +50,8 @@ flu-mut-rates/
 │   │   │   ├── curated_reference.gff
 │   │   │   ├── curated_reference.gtf
 │   │   │   ├── final_tree.pb.gz          # Global tree (all hosts)
-│   │   │   ├── host_specific_trees/
-│   │   │   │   ├── human_tree.pb.gz
-│   │   │   │   └── avian_tree.pb.gz
+│   │   │   ├── host_ancestral/
+│   │   │   │   └── combined_ancestral_states.tab  # Per-node host assignments
 │   │   │   └── geographic_trees/
 │   │   │       ├── north_america_tree.pb.gz
 │   │   │       ├── europe_tree.pb.gz
@@ -155,15 +154,15 @@ For each segment and subtype combination:
    - `split_a/mutation_counts.csv` - Mutation counts restricted to a random half of branches
    - `split_b/mutation_counts.csv` - Mutation counts on the complementary half
 
-#### Host-Specific Tree Analysis
-For each segment, subtype, and host combination:
+#### Host-Stratified Analysis
+Rather than counting mutations on separate per-host trees, host stratification is now done on the *global* tree using ancestral host-state reconstructions. For each segment and subtype:
 1. Takes the coding sites file from Step 1
-2. Reads the host-specific phylogenetic tree (`host_specific_trees/{host}_tree.pb.gz`), reference sequence, and GTF annotation
-3. Traverses the tree to count mutations at each branch for that specific host
+2. Reads the global tree (`final_tree.pb.gz`), reference sequence, GTF annotation, and a host-state TSV (`host_ancestral/combined_ancestral_states.tab`) that maps every node — tips and internal nodes alike — to a host group via the `node` and `host_group` columns
+3. Traverses the global tree and counts a branch only when its parent and child carry the **same unambiguous host**. Branches are skipped when either endpoint is ambiguous (a node assigned more than one host state), and the output is restricted to the host labels listed in `config["host_groups"]`. This keeps each counted mutation attributable to a single, confidently inferred host lineage.
 4. Classifies mutations as synonymous or non-synonymous
-5. Outputs two files per host group:
-   - `mutation_counts.csv` - Summary of mutations by site and type
-   - `parent_child_pairs.csv` - Detailed mutation records for each branch
+5. Outputs a single file pair per segment/subtype (not one per host), each carrying a `host` column that records the host group of the branch:
+   - `host_stratified/mutation_counts.csv` - Mutation counts by site and type, with a `host` column
+   - `host_stratified/parent_child_pairs.csv` - Detailed mutation records for each branch, with a `host` column
 
 #### Geographic Tree Analysis
 For each segment, subtype, and geographic group combination:
@@ -313,7 +312,7 @@ Executes an analysis notebook that:
 
 ### Step 13: Summarize Mutation Filter Logs
 
-Executes a diagnostic notebook that parses the log files produced by the mutation-counting rules and consolidates filter statistics across all trees. For each tree (global and host-specific), the notebook reports:
+Executes a diagnostic notebook that parses the log files produced by the mutation-counting rules and consolidates filter statistics across all counting passes. For each pass (global tree and host-stratified global tree), the notebook reports:
 - Total nodes and internal nodes
 - Branch counts: total examined, passing, and filtered
 - Mutation counts: total, passing, and filtered (broken down by reason: too many mutations, zero mutations, duplicate codon targets)
@@ -325,7 +324,7 @@ The notebook produces three figures:
 
 ### Step 14: Compute Subset Rates
 
-Aggregates mutation counts from all subset trees (host-specific, geographic, split-half):
+Aggregates mutation counts from all subsets (host-stratified, geographic, split-half):
 1. Reads mutation counts from each subset directory
 2. Labels each row with `subset` (group name) and `subset_type` (`host` / `geographic` / `split_half`)
 3. Computes evolutionary opportunity and mutation rates
@@ -364,11 +363,11 @@ Or run specific targets:
 # Process global tree for a specific segment/subtype
 snakemake --cores 8 results/HA/H1/mutation_counts.csv results/HA/H1/parent_child_pairs.csv
 
-# Process host-specific tree for a specific segment/subtype/host
-snakemake --cores 8 results/HA/H1/human/mutation_counts.csv
+# Process host-stratified counts for a specific segment/subtype (single file with a host column)
+snakemake --cores 8 results/HA/H1/host_stratified/mutation_counts.csv
 
-# Process both global and host-specific for a segment/subtype
-snakemake --cores 8 results/HA/H1/mutation_counts.csv results/HA/H1/human/mutation_counts.csv results/HA/H1/avian/mutation_counts.csv
+# Process both global and host-stratified counts for a segment/subtype
+snakemake --cores 8 results/HA/H1/mutation_counts.csv results/HA/H1/host_stratified/mutation_counts.csv
 
 # Process a geographic subset tree
 snakemake --cores 8 results/HA/H3/north_america/mutation_counts.csv
@@ -420,9 +419,9 @@ The pipeline generates the following output files:
        - `child` — full nucleotide sequence reconstructed at the child node
        - `branch_length` — branch length between parent and child nodes
 
-3. **Host-Specific Tree Outputs**: `results/{segment}/{subtype}/{host}/`
-   - `mutation_counts.csv` - Aggregated mutation counts for the specific host group (same columns as global `mutation_counts.csv`)
-   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`)
+3. **Host-Stratified Outputs**: `results/{segment}/{subtype}/host_stratified/`
+   - `mutation_counts.csv` - Mutation counts from the global tree, restricted to branches whose parent and child share the same unambiguous host (same columns as global `mutation_counts.csv`, plus a `host` column giving the branch's host group)
+   - `parent_child_pairs.csv` - Detailed branch-level mutation information (same columns as global `parent_child_pairs.csv`, plus a `host` column)
 
 3b. **Geographic Tree Outputs**: `results/{segment}/{subtype}/{geo}/`
    - `mutation_counts.csv` - Aggregated mutation counts for the specific geographic region (same columns as global `mutation_counts.csv`)
@@ -585,12 +584,9 @@ results/
 │   │   ├── coding_sites.csv
 │   │   ├── mutation_counts.csv
 │   │   ├── parent_child_pairs.csv
-│   │   ├── human/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
-│   │   ├── avian/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
+│   │   ├── host_stratified/
+│   │   │   ├── mutation_counts.csv       # has a host column
+│   │   │   └── parent_child_pairs.csv    # has a host column
 │   │   ├── north_america/
 │   │   │   ├── mutation_counts.csv
 │   │   │   └── parent_child_pairs.csv
