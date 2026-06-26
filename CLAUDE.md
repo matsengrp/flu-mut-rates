@@ -76,12 +76,9 @@ results/
 │   │   ├── coding_sites.csv
 │   │   ├── mutation_counts.csv
 │   │   ├── parent_child_pairs.csv
-│   │   ├── human/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
-│   │   ├── avian/
-│   │   │   ├── mutation_counts.csv
-│   │   │   └── parent_child_pairs.csv
+│   │   ├── host_stratified/
+│   │   │   ├── mutation_counts.csv       # has a host column
+│   │   │   └── parent_child_pairs.csv    # has a host column
 │   │   ├── north_america/
 │   │   │   ├── mutation_counts.csv
 │   │   │   └── parent_child_pairs.csv
@@ -146,7 +143,7 @@ results/
    - `ExpectedCalc.py`: Calculate expected mutation counts
 
 4. **notebooks/**: Jupyter notebooks executed as part of pipeline:
-   - `compute_rates.ipynb`: Calculates mutation rates from count data (global + host trees)
+   - `compute_rates.ipynb`: Calculates mutation rates from count data (global + host-stratified counts)
    - `analyze_genome_wide_rates.ipynb`: Visualizes and analyzes genome-wide rates
    - `compute_subset_rates.ipynb`: Computes rates for subset trees (host, geographic, split-half)
    - `compute_subset_fitness_effects.ipynb`: Computes AA-level fitness effects per subset using global neutral model
@@ -156,7 +153,7 @@ results/
 ### Pipeline Workflow
 
 1. **Create Coding Sites** → Maps nucleotide positions to codon positions using GFF annotations
-2. **Count Mutations** → Traverses phylogenetic trees (global, host-specific, and geographic) to count and classify mutations. The global-tree pass also emits `split_a/mutation_counts.csv` and `split_b/mutation_counts.csv` — random complementary halves of the passing branches (seeded), used as a robustness control for fitness-effect comparisons
+2. **Count Mutations** → Traverses phylogenetic trees to count and classify mutations. Three passes: (a) the global tree; (b) the global tree stratified by host, using per-node ancestral host-state reconstructions (`host_ancestral/combined_ancestral_states.tab`) — a branch is counted for a host only when parent and child share the same unambiguous host, and the output is a single file pair with a `host` column; (c) per-region geographic trees. The global-tree pass also emits `split_a/mutation_counts.csv` and `split_b/mutation_counts.csv` — random complementary halves of the passing branches (seeded), used as a robustness control for fitness-effect comparisons
 3. **Align Proteins** → Cross-subtype protein alignments (HA and NA only)
 4. **Compute Mutation Rates** → Aggregates counts and calculates genome-wide, segment-wide, motif-level, and site-specific rates
 5. **Analyze Genome-Wide Rates** → Executes analysis notebook to visualize rates and compare across hosts/viruses
@@ -170,7 +167,7 @@ results/
 
 From flu-usher pipeline:
 - `final_tree.pb.gz`: Global phylogenetic tree (all hosts) in protobuf format
-- `host_specific_trees/{host}_tree.pb.gz`: Host-specific phylogenetic trees (human, avian)
+- `host_ancestral/combined_ancestral_states.tab`: Per-node host assignments (columns `node`, `host_group`) used to stratify the global tree by host
 - `geographic_trees/{geo}_tree.pb.gz`: Geographic phylogenetic trees (north_america, europe, asia)
 - `curated_root.fasta`: Reference sequence
 - `curated_reference.gff`: Gene annotations
@@ -182,7 +179,7 @@ From flu-usher pipeline:
 - HA and NA segments are analyzed by specific subtype
 - Protein alignment is only performed for HA and NA segments
 - The pipeline uses compressed tree files (.pb.gz) from UShER
-- Both global (all hosts) and subset-specific trees (host, geographic) are analyzed; the global-tree pass also produces a random split-half pair (`split_a` / `split_b`) used as a noise-floor reference for fitness-effect comparisons
+- The global tree is analyzed both unstratified (all hosts) and host-stratified (via ancestral host-state reconstructions); geographic subsets use separate per-region trees; the global-tree pass also produces a random split-half pair (`split_a` / `split_b`) used as a noise-floor reference for fitness-effect comparisons
 - Notebooks are executed automatically via `jupyter nbconvert --execute --inplace`
 - All logs are saved in the `logs/` directory
 - The pipeline can process multiple segments/subtypes in parallel
@@ -210,7 +207,7 @@ snakemake --cores 8 results/neutral_model/local_context+global_context/model_per
 snakemake --forcerun compute_rates --cores 8
 ```
 
-**Check host-specific mutation counts:**
+**Check host-stratified mutation counts:**
 ```bash
-snakemake --cores 8 results/HA/H1/human/mutation_counts.csv results/HA/H1/avian/mutation_counts.csv
+snakemake --cores 8 results/HA/H1/host_stratified/mutation_counts.csv
 ```
