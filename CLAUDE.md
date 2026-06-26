@@ -128,7 +128,7 @@ results/
    - Input data directory (`../flu-usher/results`)
    - HA subtypes: H1, H3, H5, H7, H9
    - NA subtypes: N1, N2, N6, N8, N9
-   - Host groups: human, avian, swine
+   - Host groups: human, avian, swine, bovine
    - Geographic groups: north_america, europe, asia
    - Split-half groups: split_a, split_b (random branch partition for robustness)
    - Split-half seed: integer seed for the partition (reproducible)
