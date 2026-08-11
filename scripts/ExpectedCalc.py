@@ -109,6 +109,133 @@ def all_poss_muts(site_map):
     return ret_tall
 
 
+def check_tree_origin(root, origin_seq, max_reported=5):
+    """
+    Verify up front that a tree's mutations were recorded against `origin_seq`.
+
+    A MAT records each branch's mutations in reflocalt format (e.g. 'A123G') relative to
+    the branch's parent, so the parent base of every mutation is determined by the origin
+    sequence plus the mutations above it. This walks the tree depth-first carrying the
+    current sequence state and checks each mutation's parent base against it. If the
+    fasta we were handed is not the tree's origin, this fails here rather than letting
+    wrong ancestral sequences propagate into every downstream count.
+
+    Only `.mutations` and `.children` are used, so any tree of such nodes works.
+
+    Args:
+        root: The tree's root node (`bte.MATree.root`).
+        origin_seq (str): The sequence at the tree's origin (site 1 is index 0).
+        max_reported (int): How many disagreeing sites to name in the error message.
+
+    Returns:
+        int: The number of mutations checked.
+
+    Raises:
+        ValueError: If any mutation's parent base disagrees with the reconstructed state,
+            or if any mutation falls outside `origin_seq`.
+    """
+    state = {}  # site -> current base, for sites that differ from the origin
+    bad_sites, n_muts, n_bad = set(), 0, 0
+    # Entries are (node, undo): undo is None on the way down, and on the way back up it
+    # holds the (site, previous base or None) pairs needed to restore the parent's state.
+    stack = [(root, None)]
+    while stack:
+        node, undo = stack.pop()
+        if undo is not None:
+            for site, previous in undo:
+                if previous is None:
+                    state.pop(site, None)
+                else:
+                    state[site] = previous
+            continue
+        this_undo = []
+        for mut in node.mutations:
+            site, from_nt, to_nt = int(mut[1:-1]), mut[0], mut[-1]
+            if not 1 <= site <= len(origin_seq):
+                raise ValueError(
+                    f"Node {node.id!r} has mutation {mut!r} at site {site}, outside the "
+                    f"origin sequence of length {len(origin_seq)}."
+                )
+            n_muts += 1
+            if state.get(site, origin_seq[site - 1]) != from_nt:
+                n_bad += 1
+                bad_sites.add(site)
+            this_undo.append((site, state.get(site)))
+            state[site] = to_nt
+        stack.append((node, this_undo))
+        stack.extend((child, None) for child in node.children)
+
+    if n_bad:
+        shown = ", ".join(str(s) for s in sorted(bad_sites)[:max_reported])
+        if len(bad_sites) > max_reported:
+            shown += f", and {len(bad_sites) - max_reported} more"
+        raise ValueError(
+            f"{n_bad} of {n_muts} mutations in the tree disagree with the origin "
+            f"sequence, at {len(bad_sites)} site(s): {shown}. The origin sequence is not "
+            f"the one the tree's mutations were recorded against."
+        )
+    return n_muts
+
+
+def parse_haplotype_muts(haplotype, origin_seq):
+    """
+    Parse a node's haplotype into the mutation dict that `apply_muts` expects, checking
+    that the haplotype and the origin sequence describe the same tree.
+
+    A haplotype is the set of mutations a node carries relative to the tree's origin, in
+    reflocalt format (e.g. 'A123G' for site 123 mutating from 'A' to 'G'). Each parent
+    base must therefore match `origin_seq` at that site. If it does not, `origin_seq` is
+    not the sequence the tree's mutations were recorded against, and every sequence
+    reconstructed from it would be silently wrong at the disagreeing sites.
+
+    Args:
+        haplotype (iterable of str): Mutations in reflocalt format, as returned by
+            `bte.MATree.get_haplotype`.
+        origin_seq (str): The sequence at the tree's origin (site 1 is index 0).
+
+    Returns:
+        dict: Keys are integer sites (1-indexed), values are the resulting nucleotides.
+
+    Raises:
+        ValueError: If any mutation's parent base disagrees with `origin_seq`, or if any
+            site falls outside it.
+
+    >>> parse_haplotype_muts(["A3G", "C5T"], "TTACC") == {3: "G", 5: "T"}
+    True
+    >>> parse_haplotype_muts(["G3T"], "TTACC")
+    Traceback (most recent call last):
+        ...
+    ValueError: 1 of 1 haplotype mutations disagree with the origin sequence: site 3 is 'A' in the origin but 'G' in mutation 'G3T'. The origin sequence is not the one the tree's mutations were recorded against.
+    """  # noqa: E501
+    muts = {}
+    mismatches = []
+    n_muts = 0
+    for mut in haplotype:
+        n_muts += 1
+        site, from_nt, to_nt = int(mut[1:-1]), mut[0], mut[-1]
+        if not 1 <= site <= len(origin_seq):
+            raise ValueError(
+                f"Mutation {mut!r} is at site {site}, outside the origin sequence "
+                f"of length {len(origin_seq)}."
+            )
+        if origin_seq[site - 1] != from_nt:
+            mismatches.append(
+                f"site {site} is {origin_seq[site - 1]!r} in the origin but "
+                f"{from_nt!r} in mutation {mut!r}"
+            )
+        muts[site] = to_nt
+    if mismatches:
+        shown = "; ".join(sorted(mismatches)[:5])
+        if len(mismatches) > 5:
+            shown += f"; and {len(mismatches) - 5} more"
+        raise ValueError(
+            f"{len(mismatches)} of {n_muts} haplotype mutations disagree with the "
+            f"origin sequence: {shown}. The origin sequence is not the one the tree's "
+            f"mutations were recorded against."
+        )
+    return muts
+
+
 def apply_muts(sequence, muts):
     """
     Return the sequence after applying mutations.

@@ -28,3 +28,4 @@ dependencies:
   - altair
   - vl-convert-python
   - gh
+  - pytest

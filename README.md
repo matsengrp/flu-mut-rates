@@ -46,7 +46,7 @@ flu-mut-rates/
 │   ├── alternative_orf_boundaries.csv   # Alternative-frame ORFs that overlap the main CDS (PA-X, Jagger et al. 2012)
 │   ├── HA/
 │   │   ├── H1/
-│   │   │   ├── curated_root.fasta
+│   │   │   ├── final_tree_root.fasta    # Origin sequence of final_tree.pb.gz
 │   │   │   ├── curated_reference.gff
 │   │   │   ├── curated_reference.gtf
 │   │   │   ├── final_tree.pb.gz          # Global tree (all hosts)
@@ -109,6 +109,20 @@ data_dir: "../flu-usher/results"
 output_dir: "results"
 ```
 
+### Tests
+
+Unit tests for `scripts/` run with pytest from the repository root:
+
+```bash
+pytest scripts/
+```
+
+`scripts/test_expected_calc.py` covers the guards that check a tree's mutations against
+the origin sequence it was handed (see `check_tree_origin` and `parse_haplotype_muts` in
+`scripts/ExpectedCalc.py`). Passing the wrong fasta — for example `curated_root.fasta`,
+which is the reroot target's sequence rather than the tree root's — silently corrupts
+every reconstructed ancestral sequence, so both guards raise instead.
+
 ### Input data files
 
 Three CSV tables in `data/` define regions of the genome that are under additional non-neutral constraint on otherwise-synonymous mutations. They are consumed by `notebooks/compute_rates.ipynb` (to build the `exclude_from_mut_rate_analysis` flag used during rate aggregation and neutral-model fitting; see Step 4) and by `notebooks/analyze_fitness_effects.ipynb` (to overlay the affected regions on per-site fitness-effect plots; see Step 12).
@@ -130,7 +144,7 @@ Three CSV tables in `data/` define regions of the genome that are under addition
 ### Step 1: Coding Sites Identification
 
 For each segment and subtype combination, the pipeline:
-1. Reads a reference sequence (FASTA) and gene annotation (GFF)
+1. Reads the tree's origin sequence (`final_tree_root.fasta`) and gene annotation (GFF)
 2. Identifies coding and non-coding regions
 3. Maps each nucleotide site to its codon position (1, 2, 3 or "noncoding")
 4. Generates a CSV file with site-specific information including gene, codon site, and codon position
@@ -144,7 +158,7 @@ The pipeline performs two types of mutation counting:
 #### Global Tree Analysis (All Hosts Combined)
 For each segment and subtype combination:
 1. Takes the coding sites file from Step 1
-2. Reads the global phylogenetic tree (`final_tree.pb.gz`), reference sequence, and GTF annotation
+2. Reads the global phylogenetic tree (`final_tree.pb.gz`), its origin sequence (`final_tree_root.fasta`), and GTF annotation
 3. Traverses the tree to count mutations at each branch across all hosts
 4. Classifies mutations as synonymous or non-synonymous
 5. **In the same traversal**, randomly partitions every passing branch into `split_a` or `split_b` by a coin flip seeded with `config["split_half_seed"]` (a robustness control: see Step 16)
@@ -157,7 +171,7 @@ For each segment and subtype combination:
 #### Host-Stratified Analysis
 Rather than counting mutations on separate per-host trees, host stratification is now done on the *global* tree using ancestral host-state reconstructions. For each segment and subtype:
 1. Takes the coding sites file from Step 1
-2. Reads the global tree (`final_tree.pb.gz`), reference sequence, GTF annotation, and a host-state TSV (`host_ancestral/combined_ancestral_states.tab`) that maps every node — tips and internal nodes alike — to a host group via the `node` and `host_group` columns
+2. Reads the global tree (`final_tree.pb.gz`), its origin sequence (`final_tree_root.fasta`), GTF annotation, and a host-state TSV (`host_ancestral/combined_ancestral_states.tab`) that maps every node — tips and internal nodes alike — to a host group via the `node` and `host_group` columns
 3. Traverses the global tree and counts a branch only when its parent and child carry the **same unambiguous host**. Branches are skipped when either endpoint is ambiguous (a node assigned more than one host state), and the output is restricted to the host labels listed in `config["host_groups"]`. This keeps each counted mutation attributable to a single, confidently inferred host lineage.
 4. Classifies mutations as synonymous or non-synonymous
 5. Outputs a single file pair per segment/subtype (not one per host), each carrying a `host` column that records the host group of the branch:
@@ -167,7 +181,7 @@ Rather than counting mutations on separate per-host trees, host stratification i
 #### Geographic Tree Analysis
 For each segment, subtype, and geographic group combination:
 1. Takes the coding sites file from Step 1
-2. Reads the geographic phylogenetic tree (`geographic_trees/{geo}_tree.pb.gz`), reference sequence, and GTF annotation
+2. Reads the geographic phylogenetic tree (`geographic_trees/{geo}_tree.pb.gz`), its origin sequence (`final_tree_root.fasta`, inherited from the global tree since the geographic trees are extracted after rerooting), and GTF annotation
 3. Traverses the tree to count mutations at each branch for that geographic region
 4. Classifies mutations as synonymous or non-synonymous
 5. Outputs two files per geographic group:

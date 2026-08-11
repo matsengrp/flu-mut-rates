@@ -181,7 +181,7 @@ rule all:
 # Create coding sites file
 rule make_coding_sites:
     input:
-        ref_fasta=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        ref_fasta=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree_root.fasta",
         gff_file=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gff"
     output:
         coding_sites="{output_dir}/{segment}/{subtype}/coding_sites.csv",
@@ -212,7 +212,7 @@ rule count_mutations_geographic_trees:
     input:
         tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/geographic_trees/{wildcards.geo}_tree.pb.gz",
         coding_site_path=rules.make_coding_sites.output.coding_sites,
-        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
         all_counts_path="{output_dir}/{segment}/{subtype}/{geo}/mutation_counts.csv",
@@ -239,7 +239,7 @@ rule count_mutations_host_stratified:
     input:
         tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree.pb.gz",
         coding_site_path=rules.make_coding_sites.output.coding_sites,
-        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf",
         host_tsv=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/host_ancestral/combined_ancestral_states.tab"
     output:
@@ -270,7 +270,7 @@ rule count_mutations:
     input:
         tree_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree.pb.gz",
         coding_site_path=rules.make_coding_sites.output.coding_sites,
-        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_root.fasta",
+        fasta_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/final_tree_root.fasta",
         gtf_path=lambda wildcards: f"{config['data_dir']}/{wildcards.segment}/{wildcards.subtype}/curated_reference.gtf"
     output:
         all_counts_path="{output_dir}/{segment}/{subtype}/mutation_counts.csv",

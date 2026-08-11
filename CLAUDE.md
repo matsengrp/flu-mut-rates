@@ -21,6 +21,12 @@ conda env create -f environment.yml
 conda activate flu-mut-rates
 ```
 
+### Running the Tests
+```bash
+# Unit tests for scripts/ (run from the repository root)
+pytest scripts/
+```
+
 ### Running the Pipeline
 ```bash
 # Test run (dry-run) to see what will be executed
@@ -169,7 +175,7 @@ From flu-usher pipeline:
 - `final_tree.pb.gz`: Global phylogenetic tree (all hosts) in protobuf format
 - `host_ancestral/combined_ancestral_states.tab`: Per-node host assignments (columns `node`, `host_group`) used to stratify the global tree by host
 - `geographic_trees/{geo}_tree.pb.gz`: Geographic phylogenetic trees (north_america, europe, asia)
-- `curated_root.fasta`: Reference sequence
+- `final_tree_root.fasta`: Origin sequence of `final_tree.pb.gz` — the sequence its mutations are recorded against. This is *not* `curated_root.fasta`, which is the reroot target's own sequence (one branch below the root). The geographic trees are extracted after rerooting and so share this origin. `check_tree_origin` in `scripts/ExpectedCalc.py` fails loudly at the start of every counting run if the fasta and the tree disagree; `parse_haplotype_muts` re-checks bte's accumulated haplotypes as the counting proceeds. Both are covered by `scripts/test_expected_calc.py` (`pytest scripts/`).
 - `curated_reference.gff`: Gene annotations
 - `curated_reference.gtf`: Gene transfer format annotations
 
