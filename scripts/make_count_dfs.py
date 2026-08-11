@@ -80,15 +80,20 @@ class CountsHelper:
 
         # Read in the tree, translate mutations, and make a list of nodes
         self.tree = bte.MATree(tree_path)
+        self.translations = defaultdict(list, self.tree.translate(gtf_path, fasta_path))
 
-        # Fail before doing any work if the fasta is not the sequence this tree's
+        # Fail before the counting traversal if the fasta is not the sequence this tree's
         # mutations were recorded against, since every ancestral sequence reconstructed
         # from it would be wrong at the sites where the two disagree. Note that the tree's
         # origin is its root node's sequence (final_tree_root.fasta), not the reroot
         # target's (curated_root.fasta) -- the two differ by the target's branch.
+        #
+        # This has to run *after* translate(): walking the tree first can make
+        # bte.MATree.translate raise a spurious UnicodeDecodeError on garbage bytes. The
+        # fault is inside bte and is sensitive to preceding Python execution in ways that
+        # do not correspond to what the traversal does, so keep translate() first.
         check_tree_origin(self.tree.root, self.ref_seq)
 
-        self.translations = defaultdict(list, self.tree.translate(gtf_path, fasta_path))
         self.nodes = self.tree.depth_first_expansion()
         self.int_nodes = [n for n in self.nodes if not n.is_leaf()]
         self.n_nodes = len(self.nodes)
