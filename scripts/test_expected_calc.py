@@ -78,6 +78,18 @@ def test_error_truncates_long_mismatch_lists():
         parse_haplotype_muts(haplotype, ORIGIN)
 
 
+def test_mismatches_are_reported_in_site_order():
+    """
+    Sites are ordered numerically, not lexically, so site 2 precedes site 10. Sorting the
+    formatted messages instead would put site 10 first.
+    """
+    haplotype = [f"{WRONG_NT[ORIGIN[i - 1]]}{i}G" for i in (2, 3, 10)]
+    with pytest.raises(ValueError) as exc:
+        parse_haplotype_muts(haplotype, ORIGIN)
+    msg = str(exc.value)
+    assert msg.index("site 2 is") < msg.index("site 3 is") < msg.index("site 10 is")
+
+
 def test_site_past_end_of_origin_raises():
     with pytest.raises(ValueError, match=r"outside the origin sequence of length 10"):
         parse_haplotype_muts(["A11G"], ORIGIN)
@@ -250,8 +262,29 @@ def test_deep_linear_chain_does_not_hit_a_recursion_limit():
     depth = sys.getrecursionlimit() * 3
     node = Node("leaf", ["A5C"])
     for i in range(depth):
-        node = Node(f"n{i}", ["T2C"] if i % 2 else ["C2T"], [node])
+        # Built bottom-up, so node i ends up (depth - i) branches below the root. Site 2
+        # starts as the origin's 'T' and alternates on the way down, so the branch into an
+        # odd depth mutates T->C and into an even depth C->T. Deriving the direction from
+        # the node's depth rather than from `i` keeps the chain self-consistent whatever
+        # `depth` happens to be, instead of relying on its parity.
+        mut = "T2C" if (depth - i) % 2 else "C2T"
+        node = Node(f"n{i}", [mut], [node])
     assert check_tree_origin(Node("root", [], [node]), ORIGIN) == depth + 1
+
+
+def test_a_wrong_origin_at_a_never_mutated_site_is_not_caught():
+    """
+    Pins the documented blind spot. The walk only consults the origin at a site's first
+    mutation on each path, so a site that is constant across the whole tree is never
+    examined and an origin that is wrong there passes silently. This is why a clean run
+    licenses "the origin is right at the sites that mutate", not "the origin is right".
+    """
+    tree = Node("root", [], [Node("a", ["A1G"]), Node("b", ["T2C"])])
+    # Site 7 is not touched by any branch above.
+    wrong_at_7 = ORIGIN[:6] + WRONG_NT[ORIGIN[6]] + ORIGIN[7:]
+    assert sum(a != b for a, b in zip(ORIGIN, wrong_at_7)) == 1
+    assert check_tree_origin(tree, ORIGIN) == 2
+    assert check_tree_origin(tree, wrong_at_7) == 2
 
 
 # --- shared parsing / message helpers ---

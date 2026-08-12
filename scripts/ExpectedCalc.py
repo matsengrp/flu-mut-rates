@@ -292,16 +292,23 @@ def parse_haplotype_muts(haplotype, origin_seq, max_reported=5):
                 f"origin, so each site may appear at most once."
             )
         if origin_seq[site - 1] != from_nt:
+            # Paired with the site so the report below can order by site number.
+            # Sorting the formatted strings instead would order them lexically, putting
+            # site 10 ahead of site 2.
             mismatches.append(
-                f"site {site} is {origin_seq[site - 1]!r} in the origin but "
-                f"{from_nt!r} in mutation {mut!r}"
+                (
+                    site,
+                    f"site {site} is {origin_seq[site - 1]!r} in the origin but "
+                    f"{from_nt!r} in mutation {mut!r}",
+                )
             )
         muts[site] = to_nt
     if mismatches:
+        described = [message for _, message in sorted(mismatches)]
         raise ValueError(
             f"{len(mismatches)} of {n_muts} haplotype mutations disagree with the "
             f"origin sequence: "
-            f"{summarize_disagreements(sorted(mismatches), max_reported, sep='; ')}. "
+            f"{summarize_disagreements(described, max_reported, sep='; ')}. "
             f"The origin sequence is not the one the tree's mutations were recorded "
             f"against."
         )
