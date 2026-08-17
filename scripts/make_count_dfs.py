@@ -2,7 +2,12 @@ import pandas as pd
 import numpy as np
 from collections import defaultdict, Counter
 import bte
-from ExpectedCalc import PossibleMutations, apply_muts
+from ExpectedCalc import (
+    PossibleMutations,
+    apply_muts,
+    check_tree_origin,
+    parse_haplotype_muts,
+)
 from time import time
 from multiprocessing import Pool
 from math import ceil
@@ -76,6 +81,19 @@ class CountsHelper:
         # Read in the tree, translate mutations, and make a list of nodes
         self.tree = bte.MATree(tree_path)
         self.translations = defaultdict(list, self.tree.translate(gtf_path, fasta_path))
+
+        # Fail before the counting traversal if the fasta is not the sequence this tree's
+        # mutations were recorded against, since every ancestral sequence reconstructed
+        # from it would be wrong at the sites where the two disagree. Note that the tree's
+        # origin is its root node's sequence (final_tree_root.fasta), not the reroot
+        # target's (curated_root.fasta) -- the two differ by the target's branch.
+        #
+        # This has to run *after* translate(): walking the tree first can make
+        # bte.MATree.translate raise a spurious UnicodeDecodeError on garbage bytes. The
+        # fault is inside bte and is sensitive to preceding Python execution in ways that
+        # do not correspond to what the traversal does, so keep translate() first.
+        check_tree_origin(self.tree.root, self.ref_seq)
+
         self.nodes = self.tree.depth_first_expansion()
         self.int_nodes = [n for n in self.nodes if not n.is_leaf()]
         self.n_nodes = len(self.nodes)
@@ -189,9 +207,12 @@ class CountsHelper:
             if self.host_groups is not None and parent_host not in self.host_groups:
                 return 0, empty_partition_dfs, (parent.id, "", []), empty_filter_stats
 
-        # Get the set of mutations in the partent node relative to the reference
+        # Get the set of mutations in the partent node relative to the reference.
+        # __init__ already checked the per-branch mutations against the origin; this
+        # checks bte's accumulated haplotype, which is a separate code path, and errors
+        # out rather than reconstructing a parent sequence we know to be wrong.
         parent_node_haplotype = self.tree.get_haplotype(parent.id)
-        p_muts = {int(mut[1:-1]): mut[-1] for mut in parent_node_haplotype}
+        p_muts = parse_haplotype_muts(parent_node_haplotype, self.ref_seq)
 
         # Make a dataframe of possible mutations to the parent, add a column giving the
         # seqeunce context of each mutation, and initialize columns to record counts
