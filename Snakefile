@@ -600,6 +600,11 @@ rule analyze_fitness_effects:
         notebook="notebooks/analyze_fitness_effects.ipynb",
         aa_fitness="{output_dir}/aa_fitness_effects.csv",
         syn_fitness="{output_dir}/sitewise_synonymous_fitness_effects.csv",
+        # The notebook reads this too. Without it declared, Snakemake is free to schedule
+        # this rule alongside compute_subset_fitness_effects, which writes it -- a race
+        # that either crashes the notebook or, if a previous run left the file behind,
+        # silently feeds it a stale copy.
+        subset_aa_fitness="{output_dir}/subset_aa_fitness_effects.csv",
         ha_dms="{output_dir}/dms_data/Yu_HA/processed_dms_data.csv",
         np_dms="{output_dir}/dms_data/Bloom_NP/processed_dms_data.csv",
         pb2_dms="data/dms_data/Soh_PB2/elife-45079-fig2-data1-v1.csv",
