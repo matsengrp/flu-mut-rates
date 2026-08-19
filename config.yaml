@@ -27,6 +27,7 @@ host_groups:
   - "human"
   - "avian"
   - "swine"
+  - "bovine"
 
 geographic_groups:
   - "north_america"
